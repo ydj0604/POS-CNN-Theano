@@ -28,7 +28,8 @@ def Tanh(x):
 def Iden(x):
     y = x
     return(y)
-        
+
+
 class HiddenLayer(object):
     """
     Class for HiddenLayer
@@ -66,9 +67,10 @@ class HiddenLayer(object):
         else:
             self.params = [self.W]
 
+
 def _dropout_from_layer(rng, layer, p):
     """p is the probablity of dropping a unit
-"""
+    """
     srng = theano.tensor.shared_randomstreams.RandomStreams(rng.randint(999999))
     # p=1-p because 1's indicate keep and p is prob of dropping
     mask = srng.binomial(n=1, p=1-p, size=layer.shape)
@@ -76,6 +78,7 @@ def _dropout_from_layer(rng, layer, p):
     # int * float32 = float64 which pulls things off the gpu
     output = layer * T.cast(mask, theano.config.floatX)
     return output
+
 
 class DropoutHiddenLayer(HiddenLayer):
     def __init__(self, rng, input, n_in, n_out,
@@ -86,9 +89,10 @@ class DropoutHiddenLayer(HiddenLayer):
 
         self.output = _dropout_from_layer(rng, self.output, p=dropout_rate)
 
+
 class MLPDropout(object):
     """A multilayer perceptron with dropout"""
-    def __init__(self,rng,input,layer_sizes,dropout_rates,activations,use_bias=True):
+    def __init__(self, rng, input, layer_sizes, dropout_rates, activations, use_bias=True):
 
         #rectified_linear_activation = lambda x: T.maximum(0.0, x)
 
@@ -151,12 +155,12 @@ class MLPDropout(object):
         self.errors = self.layers[-1].errors
 
         # Grab all the parameters together.
-        self.params = [ param for layer in self.dropout_layers for param in layer.params ]
+        self.params = [param for layer in self.dropout_layers for param in layer.params]
 
     def predict(self, new_data):
         next_layer_input = new_data
         for i,layer in enumerate(self.layers):
-            if i<len(self.layers)-1:
+            if i < len(self.layers)-1:
                 next_layer_input = self.activations[i](T.dot(next_layer_input,layer.W) + layer.b)
             else:
                 p_y_given_x = T.nnet.softmax(T.dot(next_layer_input, layer.W) + layer.b)
@@ -165,13 +169,14 @@ class MLPDropout(object):
 
     def predict_p(self, new_data):
         next_layer_input = new_data
-        for i,layer in enumerate(self.layers):
-            if i<len(self.layers)-1:
-                next_layer_input = self.activations[i](T.dot(next_layer_input,layer.W) + layer.b)
+        for i, layer in enumerate(self.layers):
+            if i < len(self.layers)-1:
+                next_layer_input = self.activations[i](T.dot(next_layer_input, layer.W) + layer.b)
             else:
                 p_y_given_x = T.nnet.softmax(T.dot(next_layer_input, layer.W) + layer.b)
         return p_y_given_x
-        
+
+
 class MLP(object):
     """Multi-Layer Perceptron Class
 
@@ -234,7 +239,8 @@ class MLP(object):
         # the parameters of the model are the parameters of the two layer it is
         # made out of
         self.params = self.hiddenLayer.params + self.logRegressionLayer.params
-        
+
+
 class LogisticRegression(object):
     """Multi-class Logistic Regression Class
 
@@ -336,7 +342,8 @@ class LogisticRegression(object):
             return T.mean(T.neq(self.y_pred, y))
         else:
             raise NotImplementedError()
-        
+
+
 class LeNetConvPoolLayer(object):
     """Pool Layer of a convolutional network """
 
@@ -377,7 +384,7 @@ class LeNetConvPoolLayer(object):
         fan_out = (filter_shape[0] * numpy.prod(filter_shape[2:]) /numpy.prod(poolsize))
         # initialize weights with random weights
         if self.non_linear=="none" or self.non_linear=="relu":
-            self.W = theano.shared(numpy.asarray(rng.uniform(low=-0.01,high=0.01,size=filter_shape), 
+            self.W = theano.shared(numpy.asarray(rng.uniform(low=-0.01,high=0.01,size=filter_shape),
                                                 dtype=theano.config.floatX),borrow=True,name="W_conv")
         else:
             W_bound = numpy.sqrt(6. / (fan_in + fan_out))
@@ -388,10 +395,10 @@ class LeNetConvPoolLayer(object):
         
         # convolve input feature maps with filters
         conv_out = conv.conv2d(input=input, filters=self.W,filter_shape=self.filter_shape, image_shape=self.image_shape)
-        if self.non_linear=="tanh":
+        if self.non_linear == "tanh":
             conv_out_tanh = T.tanh(conv_out + self.b.dimshuffle('x', 0, 'x', 'x'))
             self.output = downsample.max_pool_2d(input=conv_out_tanh, ds=self.poolsize, ignore_border=True)
-        elif self.non_linear=="relu":
+        elif self.non_linear == "relu":
             conv_out_tanh = ReLU(conv_out + self.b.dimshuffle('x', 0, 'x', 'x'))
             self.output = downsample.max_pool_2d(input=conv_out_tanh, ds=self.poolsize, ignore_border=True)
         else:
@@ -415,4 +422,3 @@ class LeNetConvPoolLayer(object):
             pooled_out = downsample.max_pool_2d(input=conv_out, ds=self.poolsize, ignore_border=True)
             output = pooled_out + self.b.dimshuffle('x', 0, 'x', 'x')
         return output
-        
