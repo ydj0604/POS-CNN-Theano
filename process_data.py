@@ -1,8 +1,10 @@
 import numpy as np
 import cPickle
 from collections import defaultdict
-import sys, re
+import re
 import pandas as pd
+from nltk.tag import StanfordPOSTagger
+
 
 def build_data_cv(data_folder, cv=10, clean_string=True):
     """
@@ -12,7 +14,14 @@ def build_data_cv(data_folder, cv=10, clean_string=True):
     pos_file = data_folder[0]
     neg_file = data_folder[1]
     vocab = defaultdict(float)
+    pos_vocab = defaultdict(float)
+    pos_tagger = StanfordPOSTagger(
+        'pos-tag/english-left3words-distsim.tagger',
+        'pos-tag/stanford-postagger.jar',
+        'utf8', False, '-mx2000m')
+
     with open(pos_file, "rb") as f:
+        revs_text = []
         for line in f:       
             rev = []
             rev.append(line.strip())
@@ -20,32 +29,58 @@ def build_data_cv(data_folder, cv=10, clean_string=True):
                 orig_rev = clean_str(" ".join(rev))
             else:
                 orig_rev = " ".join(rev).lower()
-            words = set(orig_rev.split())
+            revs_text.append(orig_rev.split())
+
+        revs_tagged = pos_tagger.tag_sents(revs_text)
+
+        for rev_tagged in revs_tagged:
+            text = list(zip(*rev_tagged)[0])
+            tag = list(zip(*rev_tagged)[1])
+            words = set(text)
             for word in words:
                 vocab[word] += 1
-            datum  = {"y":1, 
-                      "text": orig_rev,                             
-                      "num_words": len(orig_rev.split()),
-                      "split": np.random.randint(0,cv)}
+            postags = set(tag)
+            for postag in postags:
+                pos_vocab[postag] += 1
+            datum = {"y": 1,
+                     "text": ' '.join(text),
+                     "tag": ' '.join(tag),
+                     "num_words": len(text),
+                     "split": np.random.randint(0, cv)}
             revs.append(datum)
+
     with open(neg_file, "rb") as f:
-        for line in f:       
+        revs_text = []
+        for line in f:
             rev = []
             rev.append(line.strip())
             if clean_string:
                 orig_rev = clean_str(" ".join(rev))
             else:
                 orig_rev = " ".join(rev).lower()
-            words = set(orig_rev.split())
+            revs_text.append(orig_rev.split())
+
+        revs_tagged = pos_tagger.tag_sents(revs_text)
+
+        for rev_tagged in revs_tagged:
+            text = list(zip(*rev_tagged)[0])
+            tag = list(zip(*rev_tagged)[1])
+            words = set(text)
             for word in words:
                 vocab[word] += 1
-            datum  = {"y":0, 
-                      "text": orig_rev,                             
-                      "num_words": len(orig_rev.split()),
-                      "split": np.random.randint(0,cv)}
+            postags = set(tag)
+            for postag in postags:
+                pos_vocab[postag] += 1
+            datum = {"y": 0,
+                     "text": ' '.join(text),
+                     "tag": ' '.join(tag),
+                     "num_words": len(text),
+                     "split": np.random.randint(0, cv)}
             revs.append(datum)
-    return revs, vocab
-    
+
+    return revs, vocab, pos_vocab
+
+
 def get_W(word_vecs, k=300):
     """
     Get word matrix. W[i] is the vector for word indexed by i
@@ -61,9 +96,10 @@ def get_W(word_vecs, k=300):
         i += 1
     return W, word_idx_map
 
+
 def load_bin_vec(fname, vocab):
     """
-    Loads 300x1 word vecs from Google (Mikolov) word2vec
+    Loads embeddings from bin file
     """
     word_vecs = {}
     with open(fname, "rb") as f:
@@ -83,7 +119,8 @@ def load_bin_vec(fname, vocab):
                word_vecs[word] = np.fromstring(f.read(binary_len), dtype='float32')  
             else:
                 f.read(binary_len)
-    return word_vecs
+    return word_vecs, layer1_size
+
 
 def add_unknown_words(word_vecs, vocab, min_df=1, k=300):
     """
@@ -92,9 +129,10 @@ def add_unknown_words(word_vecs, vocab, min_df=1, k=300):
     """
     for word in vocab:
         if word not in word_vecs and vocab[word] >= min_df:
-            word_vecs[word] = np.random.uniform(-0.25,0.25,k)  
+            word_vecs[word] = np.random.uniform(-0.25, 0.25, k)
 
-def clean_str(string, TREC=False):
+
+def clean_str(string):
     """
     Tokenization/string cleaning for all datasets except for SST.
     Every dataset is lower cased except for TREC
@@ -112,35 +150,39 @@ def clean_str(string, TREC=False):
     string = re.sub(r"\)", " \) ", string) 
     string = re.sub(r"\?", " \? ", string) 
     string = re.sub(r"\s{2,}", " ", string)    
-    return string.strip() if TREC else string.strip().lower()
-
-def clean_str_sst(string):
-    """
-    Tokenization/string cleaning for the SST dataset
-    """
-    string = re.sub(r"[^A-Za-z0-9(),!?\'\`]", " ", string)   
-    string = re.sub(r"\s{2,}", " ", string)    
     return string.strip().lower()
 
+
 if __name__=="__main__":    
-    w2v_file = sys.argv[1]     
-    data_folder = ["rt-polarity.pos","rt-polarity.neg"]    
-    print "loading data...",        
-    revs, vocab = build_data_cv(data_folder, cv=10, clean_string=True)
+    w2v_file = "data/GoogleNews-vectors-negative300.bin"
+    pos_emb_file = "data/1billion-pos-48.bin"
+    data_folder = ["mr/rt-polarity.pos", "mr/rt-polarity.neg"]
+
+    print "loading data...",
+    revs, vocab, pos_vocab = build_data_cv(data_folder, cv=10, clean_string=True)
     max_l = np.max(pd.DataFrame(revs)["num_words"])
     print "data loaded!"
     print "number of sentences: " + str(len(revs))
     print "vocab size: " + str(len(vocab))
     print "max sentence length: " + str(max_l)
-    print "loading word2vec vectors...",
-    w2v = load_bin_vec(w2v_file, vocab)
-    print "word2vec loaded!"
-    print "num words already in word2vec: " + str(len(w2v))
-    add_unknown_words(w2v, vocab)
-    W, word_idx_map = get_W(w2v)
+
+    print "loading word embeddings...",
+    w2v, w2v_dim = load_bin_vec(w2v_file, vocab)
+    print "word embeddings loaded!"
+    print "pretrained num words: " + str(len(w2v))
+    add_unknown_words(w2v, vocab, k=w2v_dim)
+    W, word_idx_map = get_W(w2v, k=w2v_dim)
+
     rand_vecs = {}
-    add_unknown_words(rand_vecs, vocab)
-    W2, _ = get_W(rand_vecs)
-    cPickle.dump([revs, W, W2, word_idx_map, vocab], open("mr.p", "wb"))
+    add_unknown_words(rand_vecs, vocab, k=w2v_dim)
+    W2, _ = get_W(rand_vecs, k=w2v_dim)
+
+    print "loading pos embeddings...",
+    p2v, p2v_dim = load_bin_vec(pos_emb_file, pos_vocab)
+    print "pos embeddings loaded!"
+    print "pretrained num pos tags: " + str(len(p2v))
+    add_unknown_words(p2v, pos_vocab, k=p2v_dim)
+    P, pos_idx_map = get_W(p2v, k=p2v_dim)
+
+    cPickle.dump([revs, W, W2, word_idx_map, vocab, P, pos_idx_map], open("mr.p", "wb"))
     print "dataset created!"
-    

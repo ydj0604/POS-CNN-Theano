@@ -14,7 +14,6 @@ from collections import OrderedDict
 import theano
 import theano.tensor as T
 import warnings
-import sys
 import time
 warnings.filterwarnings("ignore")   
 
@@ -293,7 +292,7 @@ def make_idx_data_cv(revs, word_idx_map, cv, max_l=51, k=300, filter_h=5):
 if __name__=="__main__":
     print "loading data...",
     x = cPickle.load(open("mr.p","rb"))
-    revs, W, W2, word_idx_map, vocab = x[0], x[1], x[2], x[3], x[4]
+    revs, W, W2, word_idx_map, vocab, P, pos_idx_map = x[0], x[1], x[2], x[3], x[4], x[5], x[6]
     print "data loaded!"
     mode= "-nonstatic"  # sys.argv[1]
     word_vectors = "-word2vec"  # sys.argv[2]
