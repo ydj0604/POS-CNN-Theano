@@ -231,6 +231,7 @@ def train_conv_net(datasets,
     val_perf = 0
     test_perf = 0
     cost_epoch = 0
+    best_epoch = 0
 
     while (epoch < n_epochs):
         start_time = time.time()
@@ -255,7 +256,8 @@ def train_conv_net(datasets,
             best_val_perf = val_perf
             test_loss = test_model_all(test_set_x, test_set_y, test_set_z)
             test_perf = 1 - test_loss
-    return test_perf
+            best_epoch = epoch
+    return test_perf, best_epoch
 
 
 def shared_dataset(data_xyz, borrow=True):
@@ -388,7 +390,7 @@ if __name__=="__main__":
 
     for i in r:
         datasets = make_idx_data_cv(revs, word_idx_map, pos_idx_map, i, max_l=max_len, k=W_dim, filter_h=5)
-        perf = train_conv_net(datasets,
+        perf, epoch = train_conv_net(datasets,
                               U,
                               P,
                               filter_hs=[3, 4, 5],
@@ -402,6 +404,6 @@ if __name__=="__main__":
                               activations=[Iden],
                               sqr_norm_lim=9,
                               non_static=non_static)
-        print "cv: " + str(i) + ", perf: " + str(perf)
+        print "cv: {}, perf: {}, epoch: {}".format(i, perf, epoch)
         results.append(perf)  
     print str(np.mean(results))
