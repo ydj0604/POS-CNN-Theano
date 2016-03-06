@@ -229,7 +229,7 @@ def train_conv_net(datasets,
     epoch = 0
     best_val_perf = 0
     val_perf = 0
-    test_perf = 0
+    best_test_perf = 0
     cost_epoch = 0
     best_epoch = 0
 
@@ -250,14 +250,16 @@ def train_conv_net(datasets,
         train_perf = 1 - np.mean(train_losses)
         val_losses = [val_model(i) for i in xrange(n_val_batches)]
         val_perf = 1 - np.mean(val_losses)
-        print('epoch: %i, training time: %.2f secs, train perf: %.2f %%, val perf: %.2f %%'
-              % (epoch, time.time() - start_time, train_perf * 100., val_perf*100.))
+        test_loss = test_model_all(test_set_x, test_set_y, test_set_z)
+        test_perf = 1 - test_loss
+
+        print 'epoch: {}, time: {} secs, train: {}, val: {}, test: {}'\
+            .format(epoch, time.time() - start_time, train_perf * 100., val_perf * 100., test_perf * 100.)
         if val_perf >= best_val_perf:
             best_val_perf = val_perf
-            test_loss = test_model_all(test_set_x, test_set_y, test_set_z)
-            test_perf = 1 - test_loss
+            best_test_perf = test_perf
             best_epoch = epoch
-    return test_perf, best_epoch
+    return best_test_perf, best_epoch
 
 
 def shared_dataset(data_xyz, borrow=True):
@@ -343,6 +345,9 @@ def get_idx_from_sent(sent, word_idx_map, max_l, k, filter_h):
     return x
 
 
+# TODO: decide val set HERE !!
+# TODO: for sstb, split # [0, 2]
+# TODO: for trec, split # [0, 1]
 def make_idx_data_cv(revs, word_idx_map, pos_idx_map, cv, max_l, k, filter_h):
     """
     Transforms sentences into a 2-d matrix.
@@ -364,7 +369,7 @@ def make_idx_data_cv(revs, word_idx_map, pos_idx_map, cv, max_l, k, filter_h):
 if __name__=="__main__":
     print "loading data...",
     x = cPickle.load(open("mr.p","rb"))
-    revs, W, W2, word_idx_map, vocab, P, pos_idx_map = x[0], x[1], x[2], x[3], x[4], x[5], x[6]
+    revs, W, W2, word_idx_map, vocab, P, pos_idx_map = x[0], x[1], x[2], x[3], x[4], x[5], x[6]  # TODO: get K HERE !!
     print "data loaded!"
     mode = "-nonstatic"  # sys.argv[1]
     word_vectors = "-word2vec"  # sys.argv[2]
@@ -397,7 +402,7 @@ if __name__=="__main__":
                               hidden_units=[100, 2],
                               dropout_rate=[0.5],
                               shuffle_batch=True,
-                              n_epochs=50,
+                              n_epochs=35,
                               batch_size=50,
                               lr_decay=0.95,
                               conv_non_linear="relu",
@@ -405,5 +410,5 @@ if __name__=="__main__":
                               sqr_norm_lim=9,
                               non_static=non_static)
         print "cv: {}, perf: {}, epoch: {}".format(i, perf, epoch)
-        results.append(perf)  
+        results.append(perf)
     print str(np.mean(results))
