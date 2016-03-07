@@ -440,7 +440,7 @@ if __name__=="__main__":
         print "Train/Val/Test set: {}/{}/{}".format(len(datasets[0]), len(datasets[1]), len(datasets[2]))
         perf, epoch = train_conv_net(datasets,
                                      W,
-                                     P_rand,
+                                     P,
                                      filter_hs=[3, 4, 5],
                                      hidden_units=[100, num_classes],
                                      dropout_rate=[0.5],
