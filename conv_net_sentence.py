@@ -381,13 +381,35 @@ def make_idx_data_trec(revs, word_idx_map, pos_idx_map, max_l, filter_h):
     return [train, test]
 
 
+def make_idx_data_sstb(revs, word_idx_map, pos_idx_map, max_l, filter_h):
+    train, test = [], []
+    for rev in revs:
+        sent = get_idx_from_sent(rev["text"], word_idx_map, max_l, filter_h)
+        sent.extend(get_idx_from_sent(rev["tag"], pos_idx_map, max_l, filter_h))
+        sent.append(rev["y"])
+        if rev["split"] == 0:
+            train.append(sent)
+        elif rev["split"] == 1:
+            test.append(sent)
+        # TODO: handle devset
+    train = np.array(train, dtype="int")
+    test = np.array(test, dtype="int")
+    return [train, test]
+
+
 if __name__=="__main__":
-    dataset = sys.argv[1] if len(sys.argv) > 1 else 'trec'
+    dataset = sys.argv[1] if len(sys.argv) > 1 else 'sstb'
     print "loading data...{}".format(dataset),
     if dataset == 'trec':
         x = cPickle.load(open("trec.p", "rb"))
-    else:
+    elif dataset == 'mr':
         x = cPickle.load(open("mr.p", "rb"))
+    elif dataset == 'sstb':
+        x = cPickle.load(open("sstb.p", "rb"))
+    else:
+        print "invalid dataset"
+        sys.exit()
+
     revs, W, W_rand, word_idx_map, vocab, P, P_rand, pos_idx_map, num_folds, num_classes = x  # TODO: get K HERE !!
     print "data loaded!"
     non_static = True
@@ -402,8 +424,11 @@ if __name__=="__main__":
     for i in r:
         if dataset == 'trec':
             datasets = make_idx_data_trec(revs, word_idx_map, pos_idx_map, max_l=max_len, filter_h=5)
-        else:
+        elif dataset == 'mr':
             datasets = make_idx_data_mr(revs, word_idx_map, pos_idx_map, cv=i, max_l=max_len, filter_h=5)
+        elif dataset == 'sstb':
+            datasets = make_idx_data_sstb(revs, word_idx_map, pos_idx_map, max_l=max_len, filter_h=5)
+        print "Train/Test set: {}/{}".format(len(datasets[0]), len(datasets[1]))
         perf, epoch = train_conv_net(datasets,
                                      W,
                                      P_rand,
