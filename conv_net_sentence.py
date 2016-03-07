@@ -442,7 +442,7 @@ if __name__=="__main__":
                                      W,
                                      P,
                                      filter_hs=[3, 4, 5],
-                                     hidden_units=[100, num_classes],
+                                     hidden_units=[50, num_classes],
                                      dropout_rate=[0.5],
                                      shuffle_batch=True,
                                      n_epochs=100,
