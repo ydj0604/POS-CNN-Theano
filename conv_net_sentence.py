@@ -141,33 +141,28 @@ def train_conv_net(datasets,
     #    dataset handling    #
     ##########################
 
-    # shuffle dataset and assign to mini batches
-    # if dataset size is not a multiple of mini batches, replicate extra data (at random)
-    np.random.seed(3435)
-    if datasets[0].shape[0] % batch_size > 0:
-        extra_data_num = batch_size - datasets[0].shape[0] % batch_size
-        train_set = np.random.permutation(datasets[0])   
-        extra_data = train_set[:extra_data_num]
-        new_data = np.append(datasets[0], extra_data, axis=0)
-    else:
-        new_data = datasets[0]
-    new_data = np.random.permutation(new_data)
-    n_batches = new_data.shape[0]/batch_size
-    n_train_batches = int(np.round(n_batches*0.9))
-
-    # obtain test, train, val set
-    test_set_x = datasets[1][:, :img_h]
-    test_set_z = datasets[1][:, img_h:2*img_h]
-    test_set_y = np.asarray(datasets[1][:, -1], "int32")
-
-    train_set = new_data[:n_train_batches*batch_size, :]
+    # train
+    if len(datasets[0]) % batch_size != 0:
+        datasets[0] = np.random.permutation(datasets[0])
+        to_add = batch_size - len(datasets[0]) % batch_size
+        datasets[0] = np.concatenate((datasets[0], datasets[0][:to_add]))
     train_set_x, train_set_y, train_set_z = \
-        shared_dataset((train_set[:, :img_h], train_set[:, -1], train_set[:, img_h:2*img_h]))
+        shared_dataset((datasets[0][:, :img_h], datasets[0][:, -1], datasets[0][:, img_h:2*img_h]))
+    n_train_batches = int(len(datasets[0]) / batch_size)
 
-    val_set = new_data[n_train_batches*batch_size:, :]
+    # val
+    if len(datasets[1]) % batch_size != 0:
+        datasets[1] = np.random.permutation(datasets[1])
+        to_add = batch_size - len(datasets[1]) % batch_size
+        datasets[1] = np.concatenate((datasets[1], datasets[1][:to_add]))
     val_set_x, val_set_y, val_set_z = \
-        shared_dataset((val_set[:, :img_h], val_set[:, -1], val_set[:, img_h:2*img_h]))
-    n_val_batches = n_batches - n_train_batches
+        shared_dataset((datasets[1][:, :img_h], datasets[1][:, -1], datasets[1][:, img_h:2*img_h]))
+    n_val_batches = int(len(datasets[1]) / batch_size)
+
+    # test
+    test_set_x = datasets[2][:, :img_h]
+    test_set_z = datasets[2][:, img_h:2*img_h]
+    test_set_y = np.asarray(datasets[2][:, -1], "int32")
 
     ##########################
     #    theano functions    #
@@ -348,11 +343,11 @@ def get_idx_from_sent(sent, word_idx_map, max_l, filter_h):
 # TODO: decide val set HERE !!
 # TODO: for sstb, split # [0, 2]
 # TODO: for trec, split # [0, 1]
-def make_idx_data_mr(revs, word_idx_map, pos_idx_map, cv, max_l, filter_h):
+def make_idx_data_mr(revs, word_idx_map, pos_idx_map, cv, max_l, filter_h, val_ratio=0.1):
     """
     Transforms sentences into a 2-d matrix.
     """
-    train, test = [], []
+    trainval, test = [], []
     for rev in revs:
         sent = get_idx_from_sent(rev["text"], word_idx_map, max_l, filter_h)
         sent.extend(get_idx_from_sent(rev["tag"], pos_idx_map, max_l, filter_h))
@@ -360,29 +355,41 @@ def make_idx_data_mr(revs, word_idx_map, pos_idx_map, cv, max_l, filter_h):
         if rev["split"] == cv:
             test.append(sent)        
         else:  
-            train.append(sent)   
-    train = np.array(train, dtype="int")
+            trainval.append(sent)
+    trainval = np.array(trainval, dtype="int")
     test = np.array(test, dtype="int")
-    return [train, test]
+
+    trainval = np.random.permutation(trainval)
+    val_size = int(len(trainval) * val_ratio)
+    val = trainval[:val_size]
+    train = trainval[val_size:]
+
+    return [train, val, test]
   
    
-def make_idx_data_trec(revs, word_idx_map, pos_idx_map, max_l, filter_h):
-    train, test = [], []
+def make_idx_data_trec(revs, word_idx_map, pos_idx_map, max_l, filter_h, val_ratio=0.1):
+    trainval, test = [], []
     for rev in revs:
         sent = get_idx_from_sent(rev["text"], word_idx_map, max_l, filter_h)
         sent.extend(get_idx_from_sent(rev["tag"], pos_idx_map, max_l, filter_h))
         sent.append(rev["y"])
         if rev["split"] == 0:
-            train.append(sent)
+            trainval.append(sent)
         else:
             test.append(sent)
-    train = np.array(train, dtype="int")
+    trainval = np.array(trainval, dtype="int")
     test = np.array(test, dtype="int")
-    return [train, test]
+
+    trainval = np.random.permutation(trainval)
+    val_size = int(len(trainval) * val_ratio)
+    val = trainval[:val_size]
+    train = trainval[val_size:]
+
+    return [train, val, test]
 
 
 def make_idx_data_sstb(revs, word_idx_map, pos_idx_map, max_l, filter_h):
-    train, test = [], []
+    train, val, test = [], [], []
     for rev in revs:
         sent = get_idx_from_sent(rev["text"], word_idx_map, max_l, filter_h)
         sent.extend(get_idx_from_sent(rev["tag"], pos_idx_map, max_l, filter_h))
@@ -391,10 +398,12 @@ def make_idx_data_sstb(revs, word_idx_map, pos_idx_map, max_l, filter_h):
             train.append(sent)
         elif rev["split"] == 1:
             test.append(sent)
-        # TODO: handle devset
+        else:
+            val.append(sent)
     train = np.array(train, dtype="int")
     test = np.array(test, dtype="int")
-    return [train, test]
+    val = np.array(val, dtype="int")
+    return [train, val, test]
 
 
 if __name__=="__main__":
@@ -428,7 +437,7 @@ if __name__=="__main__":
             datasets = make_idx_data_mr(revs, word_idx_map, pos_idx_map, cv=i, max_l=max_len, filter_h=5)
         elif dataset == 'sstb':
             datasets = make_idx_data_sstb(revs, word_idx_map, pos_idx_map, max_l=max_len, filter_h=5)
-        print "Train/Test set: {}/{}".format(len(datasets[0]), len(datasets[1]))
+        print "Train/Val/Test set: {}/{}/{}".format(len(datasets[0]), len(datasets[1]), len(datasets[2]))
         perf, epoch = train_conv_net(datasets,
                                      W,
                                      P_rand,
