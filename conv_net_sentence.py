@@ -445,7 +445,7 @@ if __name__=="__main__":
                                      hidden_units=[100, num_classes],
                                      dropout_rate=[0.5],
                                      shuffle_batch=True,
-                                     n_epochs=35,
+                                     n_epochs=100,
                                      batch_size=50,
                                      lr_decay=0.95,
                                      conv_non_linear="relu",
