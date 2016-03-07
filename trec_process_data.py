@@ -34,7 +34,7 @@ def build_data_cv(data_file):
             revs_tagged = pos_tagger.tag_sents(revs_text)
             for i in range(len(revs_tagged)):
                 rev_tagged = revs_tagged[i]
-                text = list(zip(*rev_tagged)[0])
+                text = list(zip(*rev_tagged)[0])[1:]
                 tag = list(zip(*rev_tagged)[1])
                 y = ys[i]
                 for word in set(text):
