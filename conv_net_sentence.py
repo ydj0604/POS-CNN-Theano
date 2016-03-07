@@ -368,7 +368,7 @@ def make_idx_data_cv(revs, word_idx_map, pos_idx_map, cv, max_l, k, filter_h):
 if __name__=="__main__":
     print "loading data...",
     x = cPickle.load(open("mr.p","rb"))
-    revs, W, W_rand, word_idx_map, vocab, P, P_rand, pos_idx_map = x[0], x[1], x[2], x[3], x[4], x[5], x[6]  # TODO: get K HERE !!
+    revs, W, W_rand, word_idx_map, vocab, P, P_rand, pos_idx_map = x  # TODO: get K HERE !!
     print "data loaded!"
     non_static = True
     execfile("conv_net_classes.py")
