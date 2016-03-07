@@ -369,23 +369,10 @@ def make_idx_data_cv(revs, word_idx_map, pos_idx_map, cv, max_l, k, filter_h):
 if __name__=="__main__":
     print "loading data...",
     x = cPickle.load(open("mr.p","rb"))
-    revs, W, W2, word_idx_map, vocab, P, pos_idx_map = x[0], x[1], x[2], x[3], x[4], x[5], x[6]  # TODO: get K HERE !!
+    revs, W, W_rand, word_idx_map, vocab, P, P_rand, pos_idx_map = x[0], x[1], x[2], x[3], x[4], x[5], x[6]  # TODO: get K HERE !!
     print "data loaded!"
-    mode = "-nonstatic"  # sys.argv[1]
-    word_vectors = "-word2vec"  # sys.argv[2]
-    if mode == "-nonstatic":
-        print "model architecture: CNN-non-static"
-        non_static = True
-    elif mode == "-static":
-        print "model architecture: CNN-static"
-        non_static = False
+    non_static = True
     execfile("conv_net_classes.py")
-    if word_vectors == "-rand":
-        print "using: random vectors"
-        U = W2
-    elif word_vectors == "-word2vec":
-        print "using: word2vec vectors"
-        U = W
     results = []
     r = range(0, 10)
 
@@ -396,8 +383,8 @@ if __name__=="__main__":
     for i in r:
         datasets = make_idx_data_cv(revs, word_idx_map, pos_idx_map, i, max_l=max_len, k=W_dim, filter_h=5)
         perf, epoch = train_conv_net(datasets,
-                              U,
-                              P,
+                              W,
+                              P_rand,
                               filter_hs=[3, 4, 5],
                               hidden_units=[100, 2],
                               dropout_rate=[0.5],

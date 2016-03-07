@@ -175,7 +175,7 @@ if __name__=="__main__":
 
     rand_vecs = {}
     add_unknown_words(rand_vecs, vocab, k=w2v_dim)
-    W2, _ = get_W(rand_vecs, k=w2v_dim)
+    W_rand, _ = get_W(rand_vecs, k=w2v_dim)
 
     print "loading pos embeddings...",
     p2v, p2v_dim = load_bin_vec(pos_emb_file, pos_vocab)
@@ -184,5 +184,9 @@ if __name__=="__main__":
     add_unknown_words(p2v, pos_vocab, k=p2v_dim)
     P, pos_idx_map = get_W(p2v, k=p2v_dim)
 
-    cPickle.dump([revs, W, W2, word_idx_map, vocab, P, pos_idx_map], open("mr.p", "wb"))
+    rand_vecs = {}
+    add_unknown_words(rand_vecs, pos_vocab, k=p2v_dim)
+    P_rand, _ = get_W(rand_vecs, k=p2v_dim)
+
+    cPickle.dump([revs, W, W_rand, word_idx_map, vocab, P, P_rand, pos_idx_map], open("mr.p", "wb"))
     print "dataset created!"
