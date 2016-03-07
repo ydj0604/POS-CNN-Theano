@@ -16,6 +16,7 @@ import theano.tensor as T
 import warnings
 import time
 import pandas as pd
+import sys
 warnings.filterwarnings("ignore")
 
 
@@ -67,7 +68,7 @@ def train_conv_net(datasets,
     rng = np.random.RandomState(3435)
     img_h = (len(datasets[0][0]) - 1) / 2  # seq len
     filter_w = img_w
-    feature_maps = hidden_units[0]  # # filters
+    feature_maps = hidden_units[0]  # filters
     filter_shapes = []
     pool_sizes = []
     for filter_h in filter_hs:
@@ -325,7 +326,7 @@ def as_floatX(variable):
     return theano.tensor.cast(variable, theano.config.floatX)
 
 
-def get_idx_from_sent(sent, word_idx_map, max_l, k, filter_h):
+def get_idx_from_sent(sent, word_idx_map, max_l, filter_h):
     """
     Transforms sentence into a list of indices. Pad with zeroes.
     """
@@ -347,14 +348,14 @@ def get_idx_from_sent(sent, word_idx_map, max_l, k, filter_h):
 # TODO: decide val set HERE !!
 # TODO: for sstb, split # [0, 2]
 # TODO: for trec, split # [0, 1]
-def make_idx_data_cv(revs, word_idx_map, pos_idx_map, cv, max_l, k, filter_h):
+def make_idx_data_mr(revs, word_idx_map, pos_idx_map, cv, max_l, filter_h):
     """
     Transforms sentences into a 2-d matrix.
     """
     train, test = [], []
     for rev in revs:
-        sent = get_idx_from_sent(rev["text"], word_idx_map, max_l, k, filter_h)
-        sent.extend(get_idx_from_sent(rev["tag"], pos_idx_map, max_l, k, filter_h))
+        sent = get_idx_from_sent(rev["text"], word_idx_map, max_l, filter_h)
+        sent.extend(get_idx_from_sent(rev["tag"], pos_idx_map, max_l, filter_h))
         sent.append(rev["y"])
         if rev["split"] == cv:
             test.append(sent)        
@@ -362,13 +363,32 @@ def make_idx_data_cv(revs, word_idx_map, pos_idx_map, cv, max_l, k, filter_h):
             train.append(sent)   
     train = np.array(train, dtype="int")
     test = np.array(test, dtype="int")
-    return [train, test]     
+    return [train, test]
   
    
+def make_idx_data_trec(revs, word_idx_map, pos_idx_map, max_l, filter_h):
+    train, test = [], []
+    for rev in revs:
+        sent = get_idx_from_sent(rev["text"], word_idx_map, max_l, filter_h)
+        sent.extend(get_idx_from_sent(rev["tag"], pos_idx_map, max_l, filter_h))
+        sent.append(rev["y"])
+        if rev["split"] == 0:
+            train.append(sent)
+        else:
+            test.append(sent)
+    train = np.array(train, dtype="int")
+    test = np.array(test, dtype="int")
+    return [train, test]
+
+
 if __name__=="__main__":
-    print "loading data...",
-    x = cPickle.load(open("mr.p","rb"))
-    revs, W, W_rand, word_idx_map, vocab, P, P_rand, pos_idx_map, num_folds = x  # TODO: get K HERE !!
+    dataset = sys.argv[1] if len(sys.argv) > 1 else 'trec'
+    print "loading data...{}".format(dataset),
+    if dataset == 'trec':
+        x = cPickle.load(open("trec.p", "rb"))
+    else:
+        x = cPickle.load(open("mr.p", "rb"))
+    revs, W, W_rand, word_idx_map, vocab, P, P_rand, pos_idx_map, num_folds, num_classes = x  # TODO: get K HERE !!
     print "data loaded!"
     non_static = True
     execfile("conv_net_classes.py")
@@ -380,21 +400,24 @@ if __name__=="__main__":
     max_len = np.max(pd.DataFrame(revs)["num_words"])
 
     for i in r:
-        datasets = make_idx_data_cv(revs, word_idx_map, pos_idx_map, i, max_l=max_len, k=W_dim, filter_h=5)
+        if dataset == 'trec':
+            datasets = make_idx_data_trec(revs, word_idx_map, pos_idx_map, max_l=max_len, filter_h=5)
+        else:
+            datasets = make_idx_data_mr(revs, word_idx_map, pos_idx_map, cv=i, max_l=max_len, filter_h=5)
         perf, epoch = train_conv_net(datasets,
-                              W,
-                              P_rand,
-                              filter_hs=[3, 4, 5],
-                              hidden_units=[100, 2],
-                              dropout_rate=[0.5],
-                              shuffle_batch=True,
-                              n_epochs=35,
-                              batch_size=50,
-                              lr_decay=0.95,
-                              conv_non_linear="relu",
-                              activations=[Iden],
-                              sqr_norm_lim=9,
-                              non_static=non_static)
+                                     W,
+                                     P_rand,
+                                     filter_hs=[3, 4, 5],
+                                     hidden_units=[100, num_classes],
+                                     dropout_rate=[0.5],
+                                     shuffle_batch=True,
+                                     n_epochs=35,
+                                     batch_size=50,
+                                     lr_decay=0.95,
+                                     conv_non_linear="relu",
+                                     activations=[Iden],
+                                     sqr_norm_lim=9,
+                                     non_static=non_static)
         print "cv: {}, perf: {}, epoch: {}".format(i, perf, epoch)
         results.append(perf)
     print str(np.mean(results))

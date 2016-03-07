@@ -189,5 +189,5 @@ if __name__=="__main__":
     add_unknown_words(rand_vecs, pos_vocab, k=p2v_dim)
     P_rand, _ = get_W(rand_vecs, k=p2v_dim)
 
-    cPickle.dump([revs, W, W_rand, word_idx_map, vocab, P, P_rand, pos_idx_map, num_folds], open("mr.p", "wb"))
+    cPickle.dump([revs, W, W_rand, word_idx_map, vocab, P, P_rand, pos_idx_map, num_folds, 2], open("mr.p", "wb"))
     print "dataset created!"
