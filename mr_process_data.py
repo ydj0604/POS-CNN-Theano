@@ -155,7 +155,7 @@ def clean_str(string):
 
 if __name__=="__main__":    
     w2v_file = "data/GoogleNews-vectors-negative300.bin"
-    pos_emb_file = "data/1billion-pos-48.bin"
+    pos_emb_file = "data/1billion-pos-24.bin"
     data_folder = ["mr/rt-polarity.pos", "mr/rt-polarity.neg"]
 
     print "loading data...",
