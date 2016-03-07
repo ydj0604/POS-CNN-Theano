@@ -159,7 +159,8 @@ if __name__=="__main__":
     data_folder = ["mr/rt-polarity.pos", "mr/rt-polarity.neg"]
 
     print "loading data...",
-    revs, vocab, pos_vocab = build_data_cv(data_folder, cv=10, clean_string=True)
+    num_folds = 10
+    revs, vocab, pos_vocab = build_data_cv(data_folder, cv=num_folds, clean_string=True)
     max_l = np.max(pd.DataFrame(revs)["num_words"])
     print "data loaded!"
     print "number of sentences: " + str(len(revs))
@@ -188,5 +189,5 @@ if __name__=="__main__":
     add_unknown_words(rand_vecs, pos_vocab, k=p2v_dim)
     P_rand, _ = get_W(rand_vecs, k=p2v_dim)
 
-    cPickle.dump([revs, W, W_rand, word_idx_map, vocab, P, P_rand, pos_idx_map], open("mr.p", "wb"))
+    cPickle.dump([revs, W, W_rand, word_idx_map, vocab, P, P_rand, pos_idx_map, num_folds], open("mr.p", "wb"))
     print "dataset created!"
