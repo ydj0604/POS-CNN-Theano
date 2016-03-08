@@ -17,6 +17,7 @@ import warnings
 import time
 import pandas as pd
 import sys
+from conv_net_classes import MLPDropout, LeNetConvPoolLayer
 warnings.filterwarnings("ignore")
 
 
@@ -24,123 +25,147 @@ warnings.filterwarnings("ignore")
 def ReLU(x):
     y = T.maximum(0.0, x)
     return(y)
-
-
 def Sigmoid(x):
     y = T.nnet.sigmoid(x)
     return(y)
-
-
 def Tanh(x):
     y = T.tanh(x)
     return(y)
-
-
 def Iden(x):
     y = x
     return(y)
 
 
-def train_conv_net(datasets,
-                   U,
-                   P,
-                   filter_hs,
-                   hidden_units,
-                   dropout_rate,
-                   shuffle_batch,
-                   n_epochs,
-                   batch_size,
-                   lr_decay,
-                   conv_non_linear,
-                   activations,
-                   sqr_norm_lim,
-                   non_static):
-    """
-    Train a simple conv net
-    img_h = sentence length (padded where necessary)
-    img_w = word vector length (300 for word2vec)
-    filter_hs = filter window sizes    
-    hidden_units = [x,y] x is the number of feature maps (per filter window), and y is the penultimate layer
-    sqr_norm_lim = s^2 in the paper
-    lr_decay = adadelta decay parameter
-    """
-    img_w = U.shape[1] + P.shape[1]  # w2v dim + p2v dim
-    rng = np.random.RandomState(3435)
-    img_h = (len(datasets[0][0]) - 1) / 2  # seq len
-    filter_w = img_w
-    feature_maps = hidden_units[0]  # filters
-    filter_shapes = []
-    pool_sizes = []
-    for filter_h in filter_hs:
-        filter_shapes.append((feature_maps, 1, filter_h, filter_w))
-        pool_sizes.append((img_h-filter_h+1, img_w-filter_w+1))
-    parameters = [("image shape", img_h, img_w),
-                  ("filter shape", filter_shapes),
-                  ("pool sizes", pool_sizes),
-                  ("hidden_units", hidden_units),
+def train_pos_cnn(datasets,
+                  W,
+                  P,
+                  filter_hs,
+                  hidden_units,
+                  dropout_rate,
+                  n_epochs,
+                  batch_size,
+                  lr_decay,
+                  conv_non_linear,
+                  activations,
+                  sqr_norm_lim,
+                  model):
+
+    # print params
+    parameters = [("num_filters", hidden_units[0]),
+                  ("num_classes", hidden_units[1]),
+                  ("filter_types", filter_hs),
                   ("dropout", dropout_rate),
+                  ("num_epochs", n_epochs),
                   ("batch_size", batch_size),
                   ("learn_decay", lr_decay),
                   ("conv_non_linear", conv_non_linear),
-                  ("non_static", non_static),
                   ("sqr_norm_lim", sqr_norm_lim),
-                  ("shuffle_batch", shuffle_batch)]
+                  ("model", model)]
     print parameters
 
     ##########################
     #   model architecture   #
     ##########################
 
-    #define model architecture
+    print 'building the model architecture...'
     index = T.lscalar()
     x = T.matrix('x')  # words
-    y = T.ivector('y')
+    y = T.ivector('y')  # labels
     z = T.matrix('z')  # tags
+    curr_batch_size = T.lscalar()
 
-    Words = theano.shared(value=U, name="Words")
+    # set necessary variables
+    rng = np.random.RandomState(3435)
+    img_h = (len(datasets[0][0]) - 1) / 2  # input height = seq len
+    feature_maps = hidden_units[0]  # num filters
+
+    # EMBEDDING LAYER
+    Words = theano.shared(value=W, name="Words")
     Tags = theano.shared(value=P, name="Tags")
-    layer0_input_words = Words[T.cast(x.flatten(), dtype="int32")].reshape((x.shape[0], 1, img_h, Words.shape[1]))
-    layer0_input_tags = Tags[T.cast(z.flatten(), dtype="int32")].reshape((z.shape[0], 1, img_h, Tags.shape[1]))
-    layer0_input = T.concatenate([layer0_input_words, layer0_input_tags], 3)  # TODO: concat words and tags !!!
+    emb_layer_params = [Words] + [Tags]
 
+    if model == "concat":
+        print 'use concat...'
+        layer0_input_words = Words[T.cast(x.flatten(), dtype="int32")].reshape((curr_batch_size, 1, img_h, Words.shape[1]))
+        layer0_input_tags = Tags[T.cast(z.flatten(), dtype="int32")].reshape((curr_batch_size, 1, img_h, Tags.shape[1]))
+        layer0_input = T.concatenate([layer0_input_words, layer0_input_tags], 3)  # curr_batch_size, 1, img_h, D+M
+        img_w = W.shape[1] + P.shape[1]
+
+    elif model == "mult":
+        print 'use mult...'
+        window = 5  # TODO: set window size !!!
+        CW = Words[T.cast(x.flatten(), dtype="int32")].reshape((curr_batch_size, 1, img_h, Words.shape[1]))
+        CP = Tags[T.cast(z.flatten(), dtype="int32")].reshape((curr_batch_size, img_h, Tags.shape[1]))
+        left_pad = CP[:, CP.shape[1]-int(window/2):, :]
+        right_pad = CP[:, :int(window/2), :]
+        CP_padded = T.concatenate([left_pad, CP, right_pad], 1)
+        CP_stack_list = []
+        for k in range(window):
+            CP_stack_list.append(CP_padded[:, k:k+img_h, :])
+        CP_stack = T.concatenate(CP_stack_list, 2)
+        CP_stack = CP_stack.reshape((curr_batch_size, 1, img_h, Tags.shape[1]*window))
+        CW_CP = T.concatenate([CW, CP_stack], 3)
+        F = W.shape[1]  # TODO: set F, final dim to represent each token !!!
+        Q = theano.shared(np.asarray(rng.uniform(low=-0.01,
+                                                 high=0.01,
+                                                 size=[W.shape[1] + P.shape[1]*window, F]),
+                                     dtype=theano.config.floatX),
+                          borrow=True,
+                          name="Q")
+        emb_layer_params += [Q]  # add Q to the list of params to train
+        layer0_input = ReLU(T.dot(CW_CP, Q))  # curr_batch_size, 1, img_h, F
+        img_w = F
+
+    else:
+        print "invalid model"
+        sys.exit()
+
+    # set more variables
+    filter_w = img_w  # filter width = input matrix width
+
+    # construct filter shapes and pool sizes
+    filter_shapes = []
+    pool_sizes = []
+    for filter_h in filter_hs:
+        filter_shapes.append((feature_maps, 1, filter_h, filter_w))
+        pool_sizes.append((img_h-filter_h+1, img_w-filter_w+1))
+
+    # CONV-POOL LAYER
     conv_layers = []
     layer1_inputs = []
-    for i in xrange(len(filter_hs)):
-        filter_shape = filter_shapes[i]
-        pool_size = pool_sizes[i]
+    for i in xrange(len(filter_shapes)):
         conv_layer = LeNetConvPoolLayer(rng,
                                         input=layer0_input,
-                                        image_shape=(batch_size, 1, img_h, img_w),
-                                        filter_shape=filter_shape,
-                                        poolsize=pool_size,
+                                        image_shape=(None, 1, img_h, img_w),
+                                        filter_shape=filter_shapes[i],
+                                        poolsize=pool_sizes[i],
                                         non_linear=conv_non_linear)
-        layer1_input = conv_layer.output.flatten(2)
+        layer1_inputs.append(conv_layer.output.flatten(2))
         conv_layers.append(conv_layer)
-        layer1_inputs.append(layer1_input)
     layer1_input = T.concatenate(layer1_inputs, 1)
-    hidden_units[0] = feature_maps * len(filter_hs)
+    hidden_units[0] = feature_maps * len(filter_shapes)  # update the hidden units
+
+    # OUTPUT LAYER (Dropout, Fully-Connected, Soft-Max)
     classifier = MLPDropout(rng,
                             input=layer1_input,
                             layer_sizes=hidden_units,
                             activations=activations,
                             dropout_rates=dropout_rate)
     
-    #define parameters of the model and update functions using adadelta
+    # UPDATE
     params = classifier.params     
     for conv_layer in conv_layers:
         params += conv_layer.params
-    if non_static:
-        #if word vectors are allowed to change, add them as model parameters
-        params += [Words]
-        params += [Tags]
+    params += emb_layer_params
     cost = classifier.negative_log_likelihood(y) 
-    dropout_cost = classifier.dropout_negative_log_likelihood(y)           
+    dropout_cost = classifier.dropout_negative_log_likelihood(y)  # use this to update
     grad_updates = sgd_updates_adadelta(params, dropout_cost, lr_decay, 1e-6, sqr_norm_lim)
 
     ##########################
     #    dataset handling    #
     ##########################
 
+    print 'handling dataset...'
     # train
     if len(datasets[0]) % batch_size != 0:
         datasets[0] = np.random.permutation(datasets[0])
@@ -160,92 +185,95 @@ def train_conv_net(datasets,
     n_val_batches = int(len(datasets[1]) / batch_size)
 
     # test
-    test_set_x = datasets[2][:, :img_h]
-    test_set_z = datasets[2][:, img_h:2*img_h]
-    test_set_y = np.asarray(datasets[2][:, -1], "int32")
+    test_set_x, test_set_y, test_set_z = \
+        shared_dataset((datasets[2][:, :img_h], datasets[2][:, -1], datasets[2][:, img_h:2*img_h]))
+    n_test_batches = int(len(datasets[2]) / batch_size)  # TODO: left-overs
+    if len(datasets[2]) % batch_size > 0:
+        n_test_batches += 1
 
     ##########################
     #    theano functions    #
     ##########################
 
+    print 'preparing theano functions...'
     zero_vec_tensor = T.vector()
     set_zero_word = theano.function([zero_vec_tensor],
-                               updates=[(Words, T.set_subtensor(Words[0, :], zero_vec_tensor))],
-                               allow_input_downcast=True)
+                                    updates=[(Words, T.set_subtensor(Words[0, :], zero_vec_tensor))],
+                                    allow_input_downcast=True)
     set_zero_pos = theano.function([zero_vec_tensor],
-                               updates=[(Tags, T.set_subtensor(Tags[0, :], zero_vec_tensor))],
-                               allow_input_downcast=True)
-
-    val_model = theano.function([index], classifier.errors(y),
+                                   updates=[(Tags, T.set_subtensor(Tags[0, :], zero_vec_tensor))],
+                                   allow_input_downcast=True)
+    val_model = theano.function([index, curr_batch_size], classifier.errors(y),
                                 givens={
                                     x: val_set_x[index * batch_size: (index + 1) * batch_size],
                                     y: val_set_y[index * batch_size: (index + 1) * batch_size],
                                     z: val_set_z[index * batch_size: (index + 1) * batch_size]},
                                 allow_input_downcast=True)
-    #compile theano functions to get train/val/test errors
-    test_model = theano.function([index], classifier.errors(y),
+    train_eval_model = theano.function([index, curr_batch_size], classifier.errors(y),
                                  givens={
                                      x: train_set_x[index * batch_size: (index + 1) * batch_size],
                                      y: train_set_y[index * batch_size: (index + 1) * batch_size],
                                      z: train_set_z[index * batch_size: (index + 1) * batch_size]},
-                                 allow_input_downcast=True)               
-    train_model = theano.function([index], cost, updates=grad_updates,
+                                 allow_input_downcast=True)
+    train_model = theano.function([index, curr_batch_size], cost, updates=grad_updates,
                                   givens={
                                       x: train_set_x[index*batch_size:(index+1)*batch_size],
                                       y: train_set_y[index*batch_size:(index+1)*batch_size],
                                       z: train_set_z[index*batch_size:(index+1)*batch_size]},
                                   allow_input_downcast=True)
+    test_model = theano.function([index, curr_batch_size], classifier.errors(y),
+                                 givens={
+                                     x: test_set_x[index * batch_size: (index + 1) * batch_size],
+                                     y: test_set_y[index * batch_size: (index + 1) * batch_size],
+                                     z: test_set_z[index * batch_size: (index + 1) * batch_size]},
+                                 allow_input_downcast=True)
 
     ##########################
     #  theano test function  #
     ##########################
 
-    test_pred_layers = []
-    test_size = test_set_x.shape[0]
-    test_layer0_input_words = Words[T.cast(x.flatten(), dtype="int32")].reshape((test_size, 1, img_h, Words.shape[1]))
-    test_layer0_input_tags = Tags[T.cast(z.flatten(), dtype="int32")].reshape((test_size, 1, img_h, Tags.shape[1]))
-    test_layer0_input = T.concatenate([test_layer0_input_words, test_layer0_input_tags], 3)  # TODO: concat !!
-    for conv_layer in conv_layers:
-        test_layer0_output = conv_layer.predict(test_layer0_input, test_size)
-        test_pred_layers.append(test_layer0_output.flatten(2))
-    test_layer1_input = T.concatenate(test_pred_layers, 1)
-    test_y_pred = classifier.predict(test_layer1_input)
-    test_error = T.mean(T.neq(test_y_pred, y))
-    test_model_all = theano.function([x, y, z],
-                                     test_error,
-                                     allow_input_downcast=True)
+    # print 'preparing theano test function...'
+    # test_size = test_set_x.shape[0]
+    # test_layer0_input = T.concatenate([Words[T.cast(x.flatten(), dtype="int32")].reshape((test_size, 1, img_h, Words.shape[1])),
+    #                                    Tags[T.cast(z.flatten(), dtype="int32")].reshape((test_size, 1, img_h, Tags.shape[1]))], 3)
+    # test_layer1_inputs = []
+    # for conv_layer in conv_layers:
+    #     test_layer0_output = conv_layer.predict(test_layer0_input, test_size)
+    #     test_layer1_inputs.append(test_layer0_output.flatten(2))
+    # test_layer1_input = T.concatenate(test_layer1_inputs, 1)
+    # test_y_pred = classifier.predict(test_layer1_input)
+    # test_error = T.mean(T.neq(test_y_pred, y))
+    # test_model_all = theano.function([x, y, z],
+    #                                  test_error,
+    #                                  allow_input_downcast=True)
 
     ##########################
     #        training        #
     ##########################
-    
-    #start training over mini-batches
-    print '... training'
+
+    print 'training...'
     epoch = 0
     best_val_perf = 0
-    val_perf = 0
     best_test_perf = 0
-    cost_epoch = 0
     best_epoch = 0
 
-    while (epoch < n_epochs):
+    while epoch < n_epochs:
         start_time = time.time()
-        epoch = epoch + 1
-        if shuffle_batch:
-            for minibatch_index in np.random.permutation(range(n_train_batches)):
-                cost_epoch = train_model(minibatch_index)
-                set_zero_word(np.zeros(U.shape[1]))
-                set_zero_pos(np.zeros(P.shape[1]))
-        else:
-            for minibatch_index in xrange(n_train_batches):
-                cost_epoch = train_model(minibatch_index)  
-                set_zero_word(np.zeros(U.shape[1]))
-                set_zero_pos(np.zeros(P.shape[1]))
-        train_losses = [test_model(i) for i in xrange(n_train_batches)]
+        epoch += 1
+        step = 1
+        for minibatch_index in np.random.permutation(range(n_train_batches)):
+            cost = train_model(minibatch_index, min(batch_size, len(datasets[0])-minibatch_index*batch_size))
+            set_zero_word(np.zeros(W.shape[1]))
+            set_zero_pos(np.zeros(P.shape[1]))
+            # print "step: {}, cost: {}".format(step, cost)
+            step += 1
+        train_losses = [train_eval_model(i, min(batch_size, len(datasets[0])-i*batch_size)) for i in xrange(n_train_batches)]
         train_perf = 1 - np.mean(train_losses)
-        val_losses = [val_model(i) for i in xrange(n_val_batches)]
+        val_losses = [val_model(i, min(batch_size, len(datasets[1])-i*batch_size)) for i in xrange(n_val_batches)]
         val_perf = 1 - np.mean(val_losses)
-        test_loss = test_model_all(test_set_x, test_set_y, test_set_z)
+        test_losses = [test_model(i, min(batch_size, len(datasets[2])-i*batch_size)) for i in xrange(n_test_batches)]
+        test_loss = np.mean(test_losses)
+        # test_loss = test_model_all(test_set_x, test_set_y, test_set_z)
         test_perf = 1 - test_loss
 
         print 'epoch: {}, time: {} secs, train: {}, val: {}, test: {}'\
@@ -267,15 +295,9 @@ def shared_dataset(data_xyz, borrow=True):
         variable) would lead to a large decrease in performance.
         """
         data_x, data_y, data_z = data_xyz
-        shared_x = theano.shared(np.asarray(data_x,
-                                            dtype=theano.config.floatX),
-                                 borrow=borrow)
-        shared_y = theano.shared(np.asarray(data_y,
-                                            dtype=theano.config.floatX),
-                                 borrow=borrow)
-        shared_z = theano.shared(np.asarray(data_z,
-                                            dtype=theano.config.floatX),
-                                 borrow=borrow)
+        shared_x = theano.shared(np.asarray(data_x, dtype=theano.config.floatX), borrow=borrow)
+        shared_y = theano.shared(np.asarray(data_y, dtype=theano.config.floatX), borrow=borrow)
+        shared_z = theano.shared(np.asarray(data_z, dtype=theano.config.floatX), borrow=borrow)
         return shared_x, T.cast(shared_y, 'int32'), shared_z
 
 
@@ -315,7 +337,6 @@ def sgd_updates_adadelta(params, cost, rho=0.95, epsilon=1e-6, norm_lim=9):
 def as_floatX(variable):
     if isinstance(variable, float):
         return np.cast[theano.config.floatX](variable)
-
     if isinstance(variable, np.ndarray):
         return np.cast[theano.config.floatX](variable)
     return theano.tensor.cast(variable, theano.config.floatX)
@@ -329,20 +350,14 @@ def get_idx_from_sent(sent, word_idx_map, max_l, filter_h):
     pad = filter_h - 1
     for i in xrange(pad):
         x.append(0)
-    words = sent.split()
-    for word in words:
+    for word in sent.split():
         if word in word_idx_map:
             x.append(word_idx_map[word])
-        else:
-            print "{} does not exist !!".format(word)
-    while len(x) < max_l+2*pad:
+    while len(x) < max_l + 2 * pad:
         x.append(0)
     return x
 
 
-# TODO: decide val set HERE !!
-# TODO: for sstb, split # [0, 2]
-# TODO: for trec, split # [0, 1]
 def make_idx_data_mr(revs, word_idx_map, pos_idx_map, cv, max_l, filter_h, val_ratio=0.1):
     """
     Transforms sentences into a 2-d matrix.
@@ -358,12 +373,10 @@ def make_idx_data_mr(revs, word_idx_map, pos_idx_map, cv, max_l, filter_h, val_r
             trainval.append(sent)
     trainval = np.array(trainval, dtype="int")
     test = np.array(test, dtype="int")
-
     trainval = np.random.permutation(trainval)
     val_size = int(len(trainval) * val_ratio)
     val = trainval[:val_size]
     train = trainval[val_size:]
-
     return [train, val, test]
   
    
@@ -379,12 +392,10 @@ def make_idx_data_trec(revs, word_idx_map, pos_idx_map, max_l, filter_h, val_rat
             test.append(sent)
     trainval = np.array(trainval, dtype="int")
     test = np.array(test, dtype="int")
-
     trainval = np.random.permutation(trainval)
     val_size = int(len(trainval) * val_ratio)
     val = trainval[:val_size]
     train = trainval[val_size:]
-
     return [train, val, test]
 
 
@@ -407,7 +418,9 @@ def make_idx_data_sstb(revs, word_idx_map, pos_idx_map, max_l, filter_h):
 
 
 if __name__=="__main__":
-    dataset = sys.argv[1] if len(sys.argv) > 1 else 'sstb'
+    # load data
+    dataset = sys.argv[1] if len(sys.argv) > 1 else 'trec'
+    model = sys.argv[2] if len(sys.argv) > 2 else 'mult'
     print "loading data...{}".format(dataset),
     if dataset == 'trec':
         x = cPickle.load(open("trec.p", "rb"))
@@ -418,40 +431,36 @@ if __name__=="__main__":
     else:
         print "invalid dataset"
         sys.exit()
-
-    revs, W, W_rand, word_idx_map, vocab, P, P_rand, pos_idx_map, num_folds, num_classes = x  # TODO: get K HERE !!
-    print "data loaded!"
-    non_static = True
-    execfile("conv_net_classes.py")
-    results = []
-    r = range(0, num_folds)
-
-    W_dim = W.shape[1]
-    P_dim = P.shape[1]
+    revs, W, W_rand, word_idx_map, vocab, P, P_rand, pos_idx_map, num_folds, num_classes = x
     max_len = np.max(pd.DataFrame(revs)["num_words"])
+    print "data loaded!"
 
-    for i in r:
+    # import conv net classes
+    execfile("conv_net_classes.py")
+
+    # start training
+    test_results = []
+    for i in range(num_folds):
         if dataset == 'trec':
             datasets = make_idx_data_trec(revs, word_idx_map, pos_idx_map, max_l=max_len, filter_h=5)
         elif dataset == 'mr':
             datasets = make_idx_data_mr(revs, word_idx_map, pos_idx_map, cv=i, max_l=max_len, filter_h=5)
         elif dataset == 'sstb':
             datasets = make_idx_data_sstb(revs, word_idx_map, pos_idx_map, max_l=max_len, filter_h=5)
-        print "Train/Val/Test set: {}/{}/{}".format(len(datasets[0]), len(datasets[1]), len(datasets[2]))
-        perf, epoch = train_conv_net(datasets,
-                                     W,
-                                     P,
-                                     filter_hs=[3, 4, 5],
-                                     hidden_units=[100, num_classes],
-                                     dropout_rate=[0.5],
-                                     shuffle_batch=True,
-                                     n_epochs=50,
-                                     batch_size=50,
-                                     lr_decay=0.95,
-                                     conv_non_linear="relu",
-                                     activations=[Iden],
-                                     sqr_norm_lim=9,
-                                     non_static=non_static)
-        print "cv: {}, perf: {}, epoch: {}".format(i, perf, epoch)
-        results.append(perf)
-    print str(np.mean(results))
+        print "train/val/test set: {}/{}/{}".format(len(datasets[0]), len(datasets[1]), len(datasets[2]))
+        best_test, best_epoch = train_pos_cnn(datasets,
+                                              W,  # use pre-trained word embeddings
+                                              P,  # use pre-trained pos embeddings
+                                              filter_hs=[3, 4, 5],
+                                              hidden_units=[100, num_classes],
+                                              dropout_rate=[0.5],
+                                              n_epochs=50,
+                                              batch_size=50,
+                                              lr_decay=0.95,
+                                              conv_non_linear="relu",
+                                              activations=[Iden],
+                                              sqr_norm_lim=9,
+                                              model=model)
+        print "cv: {}, perf: {}, epoch: {}".format(i, best_test, best_epoch)
+        test_results.append(best_test)
+    print "final perf: {}".format(np.mean(test_results))
