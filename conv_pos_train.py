@@ -353,7 +353,6 @@ def make_idx_data_mr(revs, word_idx_map, pos_idx_map, cv, max_l, filter_h, val_r
             trainval.append(sent)
     trainval = np.array(trainval, dtype="int")
     test = np.array(test, dtype="int")
-    trainval = np.random.permutation(trainval)
     val_size = int(len(trainval) * val_ratio)
     val = trainval[:val_size]
     train = trainval[val_size:]
@@ -372,7 +371,6 @@ def make_idx_data_trec(revs, word_idx_map, pos_idx_map, max_l, filter_h, val_rat
             test.append(sent)
     trainval = np.array(trainval, dtype="int")
     test = np.array(test, dtype="int")
-    trainval = np.random.permutation(trainval)
     val_size = int(len(trainval) * val_ratio)
     val = trainval[:val_size]
     train = trainval[val_size:]
