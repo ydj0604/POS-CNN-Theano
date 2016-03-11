@@ -18,7 +18,7 @@ def get_split_num(split):
     return -1
 
 
-def build_data_cv(data_file, all_phrases, min_len=1):
+def build_data_cv(data_file, all_phrases, min_len=3):
     revs = []
     vocab = defaultdict(float)
     pos_vocab = defaultdict(float)
@@ -39,8 +39,9 @@ def build_data_cv(data_file, all_phrases, min_len=1):
                 rev, sent = row[0], int(row[1])
                 rev = clean_str_sst(rev)
                 rev_tokens = rev.split()
-                if len(rev_tokens) >= min_len:
-                    revs_text.append(rev_tokens)
+                if split == 'train_phrases' and len(rev_tokens) < min_len:
+                    continue
+                revs_text.append(rev_tokens)
                 sents.append(sent)
             revs_tagged = pos_tagger.tag_sents(revs_text)
             for i in range(len(revs_tagged)):
