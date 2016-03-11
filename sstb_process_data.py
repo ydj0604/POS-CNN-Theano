@@ -9,7 +9,7 @@ import sys
 
 
 def get_split_num(split):
-    if split == 'train' or 'train_phrases':
+    if split == 'train' or split == 'train_phrases':
         return 0
     elif split == 'test':
         return 1
@@ -28,8 +28,7 @@ def build_data_cv(data_file, all_phrases, min_len=3):
         'utf8', False, '-mx2000m')
     splits = ['train', 'test', 'dev']
 
-    for z in range(len(splits)):
-        split = splits[z]
+    for split in splits:
         if split == 'train' and all_phrases:
             split = 'train_phrases'
         with open(data_file.format(split), "rb") as f:
