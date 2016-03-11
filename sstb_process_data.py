@@ -5,6 +5,7 @@ import re
 import pandas as pd
 from nltk.tag import StanfordPOSTagger
 import csv
+import sys
 
 
 def get_split_num(split):
@@ -17,7 +18,7 @@ def get_split_num(split):
     return -1
 
 
-def build_data_cv(data_file):
+def build_data_cv(data_file, all_phrases, min_len=4):
     revs = []
     vocab = defaultdict(float)
     pos_vocab = defaultdict(float)
@@ -28,6 +29,8 @@ def build_data_cv(data_file):
     splits = ['train', 'test', 'dev']
 
     for split in splits:
+        if split == 'train' and all_phrases:
+            split = 'train_phrases'
         with open(data_file.format(split), "rb") as f:
             reader = csv.reader(f)
             revs_text = []
@@ -35,7 +38,9 @@ def build_data_cv(data_file):
             for row in reader:
                 rev, sent = row[0], int(row[1])
                 rev = clean_str_sst(rev)
-                revs_text.append(rev.split())
+                rev_tokens = rev.split()
+                if len(rev_tokens) >= min_len:
+                    revs_text.append(rev_tokens)
                 sents.append(sent)
             revs_tagged = pos_tagger.tag_sents(revs_text)
             for i in range(len(revs_tagged)):
@@ -103,13 +108,21 @@ def clean_str_sst(string):
     return string.strip().lower()
 
 
-if __name__=="__main__":
+if __name__ == "__main__":
     w2v_file = "data/GoogleNews-vectors-negative300.bin"
     pos_emb_file = "data/1billion-pos-24.bin"
     data_file = "sstb/sstb_condensed_{}.csv"
 
+    if len(sys.argv) < 2 or sys.argv[1] == 'reviews':
+        all_phrases = False
+    elif sys.argv[1] == 'phrases':
+        all_phrases = True
+    else:
+        print 'invalid argument'
+        sys.exit()
+
     print "loading sstb data...",
-    revs, vocab, pos_vocab = build_data_cv(data_file)
+    revs, vocab, pos_vocab = build_data_cv(data_file, all_phrases)
     max_l = np.max(pd.DataFrame(revs)["num_words"])
     print "data loaded!"
     print "number of sentences: " + str(len(revs))
