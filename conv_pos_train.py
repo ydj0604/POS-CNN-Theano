@@ -405,6 +405,8 @@ def get_command_line_args():
                         help='which model to use')
     parser.add_argument('--num_repetitions', type=int, default=1,
                         help="how many times to run (for datasets that don't use k folds)")
+    parser.add_argument('--num_epochs', type=int, default=25,
+                        help="how many epochs")
     args = parser.parse_args()
     return args
 
@@ -448,7 +450,7 @@ if __name__=="__main__":
                                               filter_hs=[3, 4, 5],
                                               hidden_units=[100, num_classes],
                                               dropout_rate=[0.5],
-                                              n_epochs=50,
+                                              n_epochs=args.num_epochs,
                                               batch_size=50,
                                               lr_decay=0.95,
                                               conv_non_linear="relu",
