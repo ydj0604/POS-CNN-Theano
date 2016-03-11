@@ -28,7 +28,8 @@ def build_data_cv(data_file, all_phrases, min_len=3):
         'utf8', False, '-mx2000m')
     splits = ['train', 'test', 'dev']
 
-    for split in splits:
+    for z in range(len(splits)):
+        split = splits[z]
         if split == 'train' and all_phrases:
             split = 'train_phrases'
         with open(data_file.format(split), "rb") as f:
