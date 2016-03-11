@@ -17,6 +17,7 @@ import warnings
 import time
 import pandas as pd
 import sys
+import argparse
 from conv_net_classes import MLPDropout, LeNetConvPoolLayer
 warnings.filterwarnings("ignore")
 
@@ -151,13 +152,13 @@ def train_pos_cnn(datasets,
                             layer_sizes=hidden_units,
                             activations=activations,
                             dropout_rates=dropout_rate)
-    
+
     # UPDATE
-    params = classifier.params     
+    params = classifier.params
     for conv_layer in conv_layers:
         params += conv_layer.params
     params += emb_layer_params
-    cost = classifier.negative_log_likelihood(y) 
+    cost = classifier.negative_log_likelihood(y)
     dropout_cost = classifier.dropout_negative_log_likelihood(y)  # use this to update
     grad_updates = sgd_updates_adadelta(params, dropout_cost, lr_decay, 1e-6, sqr_norm_lim)
 
@@ -229,25 +230,6 @@ def train_pos_cnn(datasets,
                                  allow_input_downcast=True)
 
     ##########################
-    #  theano test function  #
-    ##########################
-
-    # print 'preparing theano test function...'
-    # test_size = test_set_x.shape[0]
-    # test_layer0_input = T.concatenate([Words[T.cast(x.flatten(), dtype="int32")].reshape((test_size, 1, img_h, Words.shape[1])),
-    #                                    Tags[T.cast(z.flatten(), dtype="int32")].reshape((test_size, 1, img_h, Tags.shape[1]))], 3)
-    # test_layer1_inputs = []
-    # for conv_layer in conv_layers:
-    #     test_layer0_output = conv_layer.predict(test_layer0_input, test_size)
-    #     test_layer1_inputs.append(test_layer0_output.flatten(2))
-    # test_layer1_input = T.concatenate(test_layer1_inputs, 1)
-    # test_y_pred = classifier.predict(test_layer1_input)
-    # test_error = T.mean(T.neq(test_y_pred, y))
-    # test_model_all = theano.function([x, y, z],
-    #                                  test_error,
-    #                                  allow_input_downcast=True)
-
-    ##########################
     #        training        #
     ##########################
 
@@ -265,7 +247,6 @@ def train_pos_cnn(datasets,
             cost = train_model(minibatch_index, min(batch_size, len(datasets[0])-minibatch_index*batch_size))
             set_zero_word(np.zeros(W.shape[1]))
             set_zero_pos(np.zeros(P.shape[1]))
-            # print "step: {}, cost: {}".format(step, cost)
             step += 1
         train_losses = [train_eval_model(i, min(batch_size, len(datasets[0])-i*batch_size)) for i in xrange(n_train_batches)]
         train_perf = 1 - np.mean(train_losses)
@@ -273,7 +254,6 @@ def train_pos_cnn(datasets,
         val_perf = 1 - np.mean(val_losses)
         test_losses = [test_model(i, min(batch_size, len(datasets[2])-i*batch_size)) for i in xrange(n_test_batches)]
         test_loss = np.mean(test_losses)
-        # test_loss = test_model_all(test_set_x, test_set_y, test_set_z)
         test_perf = 1 - test_loss
 
         print 'epoch: {}, time: {} secs, train: {}, val: {}, test: {}'\
@@ -330,8 +310,8 @@ def sgd_updates_adadelta(params, cost, rho=0.95, epsilon=1e-6, norm_lim=9):
             scale = desired_norms / (1e-7 + col_norms)
             updates[param] = stepped_param * scale
         else:
-            updates[param] = stepped_param      
-    return updates 
+            updates[param] = stepped_param
+    return updates
 
 
 def as_floatX(variable):
@@ -368,8 +348,8 @@ def make_idx_data_mr(revs, word_idx_map, pos_idx_map, cv, max_l, filter_h, val_r
         sent.extend(get_idx_from_sent(rev["tag"], pos_idx_map, max_l, filter_h))
         sent.append(rev["y"])
         if rev["split"] == cv:
-            test.append(sent)        
-        else:  
+            test.append(sent)
+        else:
             trainval.append(sent)
     trainval = np.array(trainval, dtype="int")
     test = np.array(test, dtype="int")
@@ -378,8 +358,8 @@ def make_idx_data_mr(revs, word_idx_map, pos_idx_map, cv, max_l, filter_h, val_r
     val = trainval[:val_size]
     train = trainval[val_size:]
     return [train, val, test]
-  
-   
+
+
 def make_idx_data_trec(revs, word_idx_map, pos_idx_map, max_l, filter_h, val_ratio=0.1):
     trainval, test = [], []
     for rev in revs:
@@ -417,16 +397,29 @@ def make_idx_data_sstb(revs, word_idx_map, pos_idx_map, max_l, filter_h):
     return [train, val, test]
 
 
+def get_command_line_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--dataset', type=str, default='trec',
+                        help='which dataset to use')
+    parser.add_argument('--model', type=str, default='concat',
+                        help='which model to use')
+    parser.add_argument('--num_repetitions', type=int, default=1,
+                        help="how many times to run (for datasets that don't use k folds)")
+    args = parser.parse_args()
+    return args
+
+
 if __name__=="__main__":
+    # get command line args
+    args = get_command_line_args()
+
     # load data
-    dataset = sys.argv[1] if len(sys.argv) > 1 else 'trec'
-    model = sys.argv[2] if len(sys.argv) > 2 else 'mult'
-    print "loading data...{}".format(dataset),
-    if dataset == 'trec':
+    print "loading data...{}".format(args.dataset),
+    if args.dataset == 'trec':
         x = cPickle.load(open("trec.p", "rb"))
-    elif dataset == 'mr':
+    elif args.dataset == 'mr':
         x = cPickle.load(open("mr.p", "rb"))
-    elif dataset == 'sstb':
+    elif args.dataset == 'sstb':
         x = cPickle.load(open("sstb.p", "rb"))
     else:
         print "invalid dataset"
@@ -441,11 +434,11 @@ if __name__=="__main__":
     # start training
     test_results = []
     for i in range(num_folds):
-        if dataset == 'trec':
+        if args.dataset == 'trec':
             datasets = make_idx_data_trec(revs, word_idx_map, pos_idx_map, max_l=max_len, filter_h=5)
-        elif dataset == 'mr':
+        elif args.dataset == 'mr':
             datasets = make_idx_data_mr(revs, word_idx_map, pos_idx_map, cv=i, max_l=max_len, filter_h=5)
-        elif dataset == 'sstb':
+        elif args.dataset == 'sstb':
             datasets = make_idx_data_sstb(revs, word_idx_map, pos_idx_map, max_l=max_len, filter_h=5)
         print "train/val/test set: {}/{}/{}".format(len(datasets[0]), len(datasets[1]), len(datasets[2]))
         best_test, best_epoch = train_pos_cnn(datasets,
@@ -460,7 +453,7 @@ if __name__=="__main__":
                                               conv_non_linear="relu",
                                               activations=[Iden],
                                               sqr_norm_lim=9,
-                                              model=model)
+                                              model=args.model)
         print "cv: {}, perf: {}, epoch: {}".format(i, best_test, best_epoch)
         test_results.append(best_test)
     print "final perf: {}".format(np.mean(test_results))
