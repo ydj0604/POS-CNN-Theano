@@ -9,7 +9,7 @@ import sys
 
 
 def get_split_num(split):
-    if split == 'train':
+    if split == 'train' or 'train_phrases':
         return 0
     elif split == 'test':
         return 1
