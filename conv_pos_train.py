@@ -168,19 +168,19 @@ def train_pos_cnn(datasets,
 
     print 'handling dataset...'
     # train
-    if len(datasets[0]) % batch_size != 0:
-        datasets[0] = np.random.permutation(datasets[0])
-        to_add = batch_size - len(datasets[0]) % batch_size
-        datasets[0] = np.concatenate((datasets[0], datasets[0][:to_add]))
+    # if len(datasets[0]) % batch_size != 0:
+    #     datasets[0] = np.random.permutation(datasets[0])
+    #     to_add = batch_size - len(datasets[0]) % batch_size
+    #     datasets[0] = np.concatenate((datasets[0], datasets[0][:to_add]))
     train_set_x, train_set_y, train_set_z = \
         shared_dataset((datasets[0][:, :img_h], datasets[0][:, -1], datasets[0][:, img_h:2*img_h]))
     n_train_batches = int(len(datasets[0]) / batch_size)
 
     # val
-    if len(datasets[1]) % batch_size != 0:
-        datasets[1] = np.random.permutation(datasets[1])
-        to_add = batch_size - len(datasets[1]) % batch_size
-        datasets[1] = np.concatenate((datasets[1], datasets[1][:to_add]))
+    # if len(datasets[1]) % batch_size != 0:
+    #     datasets[1] = np.random.permutation(datasets[1])
+    #     to_add = batch_size - len(datasets[1]) % batch_size
+    #     datasets[1] = np.concatenate((datasets[1], datasets[1][:to_add]))
     val_set_x, val_set_y, val_set_z = \
         shared_dataset((datasets[1][:, :img_h], datasets[1][:, -1], datasets[1][:, img_h:2*img_h]))
     n_val_batches = int(len(datasets[1]) / batch_size)
