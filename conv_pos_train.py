@@ -432,6 +432,7 @@ if __name__=="__main__":
     execfile("conv_net_classes.py")
 
     # start training
+    num_folds = args.num_repetitions if num_folds == 1 else num_folds
     test_results = []
     for i in range(num_folds):
         if args.dataset == 'trec':
