@@ -18,7 +18,7 @@ def get_split_num(split):
     return -1
 
 
-def build_data_cv(data_file, all_phrases, min_len=4):
+def build_data_cv(data_file, all_phrases, min_len=1):
     revs = []
     vocab = defaultdict(float)
     pos_vocab = defaultdict(float)
