@@ -99,14 +99,14 @@ def train_pos_cnn(datasets,
         CP = Tags[T.cast(z.flatten(), dtype="int32")].reshape((curr_batch_size, img_h, Tags.shape[1]))
         left_pad = CP[:, CP.shape[1]-int(window/2):, :]
         right_pad = CP[:, :int(window/2), :]
-        CP_padded = T.concatenate([left_pad, CP, right_pad], 1)
+        CP_padded = T.concatenate([left_pad, CP, right_pad], 1)  # batch, seq+w, M
         CP_stack_list = []
         for k in range(window):
-            CP_stack_list.append(CP_padded[:, k:k+img_h, :])
-        CP_stack = T.concatenate(CP_stack_list, 2)
-        CP_stack = CP_stack.reshape((curr_batch_size, 1, img_h, Tags.shape[1]*window))
-        CW_CP = T.concatenate([CW, CP_stack], 3)
-        F = W.shape[1]  # TODO: set F, final dim to represent each token !!!
+            CP_stack_list.append(CP_padded[:, k:k+img_h, :])  # batch, seq, M
+        CP_stack = T.concatenate(CP_stack_list, 2)  # batch, seq, M*w
+        CP_stack = CP_stack.reshape((curr_batch_size, 1, img_h, Tags.shape[1]*window))  # batch, 1, seq, M*w
+        CW_CP = T.concatenate([CW, CP_stack], 3)  # batch, 1, seqlen, w*M+D
+        F = W.shape[1] + P.shape[1]  # TODO: set F, final dim to represent each token !!!
         Q = theano.shared(np.asarray(rng.uniform(low=-0.01,
                                                  high=0.01,
                                                  size=[W.shape[1] + P.shape[1]*window, F]),
@@ -115,6 +115,53 @@ def train_pos_cnn(datasets,
                           name="Q")
         emb_layer_params += [Q]  # add Q to the list of params to train
         layer0_input = ReLU(T.dot(CW_CP, Q))  # curr_batch_size, 1, img_h, F
+        img_w = F
+
+    elif model == "tensor":
+        print 'use tensor...'
+        window = 5  # TODO: set window size !!!
+        CW = Words[T.cast(x.flatten(), dtype="int32")].reshape((curr_batch_size, img_h, Words.shape[1]))
+        CP = Tags[T.cast(z.flatten(), dtype="int32")].reshape((curr_batch_size, img_h, Tags.shape[1]))
+        left_pad = CP[:, CP.shape[1]-int(window/2):, :]
+        right_pad = CP[:, :int(window/2), :]
+        CP_padded = T.concatenate([left_pad, CP, right_pad], 1)  # batch, seq+w, M
+        CP_stack_list = []
+        for k in range(window):
+            CP_stack_list.append(CP_padded[:, k:k+img_h, :])  # batch, seq, M
+        CP_stack = T.concatenate(CP_stack_list, 2)  # batch, seqlen, w*M
+
+        # first term
+        CW_CP = T.concatenate([CW, CP_stack], 2)  # batch, seqlen, w*M+D
+        concat_dim = W.shape[1] + P.shape[1]*window
+        F = 125  # TODO: set F; final dim for each token !!!
+        V = theano.shared(np.asarray(rng.uniform(low=-0.01,
+                                                 high=0.01,
+                                                 size=[concat_dim, F, concat_dim]),
+                                     dtype=theano.config.floatX),
+                          borrow=True,
+                          name="V")
+        emb_layer_params += [V]  # add Q to the list of params to train
+        CW_CP_V = T.tensordot(CW_CP, V, [[2], [0]])  # batch, seqlen, F, w*M+D
+        CP_CW = T.concatenate([CP_stack, CW], 2)  # batch, seqlen, w*M+D
+        CW_CP_V_re = CW_CP_V.reshape((curr_batch_size*img_h, F, concat_dim))  # batch*seqlen, F, w*M+D
+        CP_CW_re = CP_CW.reshape((curr_batch_size*img_h, concat_dim))  # batch*seqlen, W*M+D
+        result = T.batched_dot(CW_CP_V_re, CP_CW_re)  # batch*seqlen, F
+        result = result.reshape((curr_batch_size, img_h, F))  # batch, seqlen, F
+        layer0_input_first = result.reshape((curr_batch_size, 1, img_h, F))  # batch, 1, seqlen, F
+
+        # second term
+        CP_stack_re = CP_stack.reshape((curr_batch_size, 1, img_h, Tags.shape[1]*window))  # batch, 1, seq, M*w
+        CW_re = CW.reshape((curr_batch_size, 1, img_h, Words.shape[1]))
+        CW_CP_re = T.concatenate([CW_re, CP_stack_re], 3)  # batch, 1, seqlen, w*M+D
+        Q = theano.shared(np.asarray(rng.uniform(low=-0.01,
+                                                 high=0.01,
+                                                 size=[concat_dim, F]),
+                                     dtype=theano.config.floatX),
+                          borrow=True,
+                          name="Q")
+        emb_layer_params += [Q]  # add Q to the list of params to train
+        layer0_input_second = T.dot(CW_CP_re, Q)  # curr_batch_size, 1, img_h, F
+        layer0_input = ReLU(layer0_input_first + layer0_input_second)
         img_w = F
 
     else:
@@ -168,19 +215,19 @@ def train_pos_cnn(datasets,
 
     print 'handling dataset...'
     # train
-    # if len(datasets[0]) % batch_size != 0:
-    #     datasets[0] = np.random.permutation(datasets[0])
-    #     to_add = batch_size - len(datasets[0]) % batch_size
-    #     datasets[0] = np.concatenate((datasets[0], datasets[0][:to_add]))
+    if len(datasets[0]) % batch_size != 0:
+        datasets[0] = np.random.permutation(datasets[0])
+        to_add = batch_size - len(datasets[0]) % batch_size
+        datasets[0] = np.concatenate((datasets[0], datasets[0][:to_add]))
     train_set_x, train_set_y, train_set_z = \
         shared_dataset((datasets[0][:, :img_h], datasets[0][:, -1], datasets[0][:, img_h:2*img_h]))
     n_train_batches = int(len(datasets[0]) / batch_size)
 
     # val
-    # if len(datasets[1]) % batch_size != 0:
-    #     datasets[1] = np.random.permutation(datasets[1])
-    #     to_add = batch_size - len(datasets[1]) % batch_size
-    #     datasets[1] = np.concatenate((datasets[1], datasets[1][:to_add]))
+    if len(datasets[1]) % batch_size != 0:
+        datasets[1] = np.random.permutation(datasets[1])
+        to_add = batch_size - len(datasets[1]) % batch_size
+        datasets[1] = np.concatenate((datasets[1], datasets[1][:to_add]))
     val_set_x, val_set_y, val_set_z = \
         shared_dataset((datasets[1][:, :img_h], datasets[1][:, -1], datasets[1][:, img_h:2*img_h]))
     n_val_batches = int(len(datasets[1]) / batch_size)
@@ -258,7 +305,7 @@ def train_pos_cnn(datasets,
 
         print 'epoch: {}, time: {} secs, train: {}, val: {}, test: {}'\
             .format(epoch, time.time() - start_time, train_perf * 100., val_perf * 100., test_perf * 100.)
-        if val_perf >= best_val_perf:
+        if val_perf > best_val_perf or (val_perf == best_val_perf and test_perf > best_test_perf):
             best_val_perf = val_perf
             best_test_perf = test_perf
             best_epoch = epoch
@@ -399,7 +446,7 @@ def get_command_line_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--dataset', type=str, default='trec',
                         help='which dataset to use')
-    parser.add_argument('--model', type=str, default='concat',
+    parser.add_argument('--model', type=str, default='tensor',
                         help='which model to use')
     parser.add_argument('--num_repetitions', type=int, default=1,
                         help="how many times to run (for datasets that don't use k folds)")
