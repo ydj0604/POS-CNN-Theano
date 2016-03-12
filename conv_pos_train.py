@@ -178,6 +178,7 @@ def train_pos_cnn(datasets,
                                      dtype=theano.config.floatX),
                           borrow=True,
                           name="V")
+        emb_layer_params += [Q]
         words_tags_Q = T.tensordot(words_tags, Q, [[1], [0]])  # batch * seqlen, D(final), D+M
         mix_vec = T.batched_dot(words_tags_Q, tags_words)  # batch * seqlen, D
         layer0_input = ReLU(mix_vec.reshape((curr_batch_size, 1, img_h, F)))
