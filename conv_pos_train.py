@@ -166,22 +166,33 @@ def train_pos_cnn(datasets,
 
     elif model == "mix":
         print 'use mix...'
+        # first term
         words = Words[T.cast(x.flatten(), dtype="int32")].reshape((curr_batch_size*img_h, Words.shape[1]))
         tags = Tags[T.cast(z.flatten(), dtype="int32")].reshape((curr_batch_size*img_h, Tags.shape[1]))
         words_tags = T.concatenate([words, tags], 1)  # batch * seqlen, D+M
         tags_words = T.concatenate([tags, words], 1)  # batch * seqlen, D+M
         concat_dim = W.shape[1] + P.shape[1]
         F = W.shape[1]
-        Q = theano.shared(np.asarray(rng.uniform(low=-0.01,
+        V = theano.shared(np.asarray(rng.uniform(low=-0.01,
                                                  high=0.01,
-                                                 size=[concat_dim, F, concat_dim]),  # D+M, D, D+M
+                                                 size=[concat_dim, F, concat_dim]),  # D+M, F, D+M
                                      dtype=theano.config.floatX),
                           borrow=True,
                           name="V")
+        emb_layer_params += [V]
+        words_tags_V = T.tensordot(words_tags, V, [[1], [0]])  # batch * seqlen, F, D+M
+        mix_vec = T.batched_dot(words_tags_V, tags_words)  # batch * seqlen, F
+
+        # second term
+        Q = theano.shared(np.asarray(rng.uniform(low=-0.01,
+                                                 high=0.01,
+                                                 size=[concat_dim, F]),
+                                     dtype=theano.config.floatX),
+                          borrow=True,
+                          name="Q")
         emb_layer_params += [Q]
-        words_tags_Q = T.tensordot(words_tags, Q, [[1], [0]])  # batch * seqlen, D(final), D+M
-        mix_vec = T.batched_dot(words_tags_Q, tags_words)  # batch * seqlen, D
-        layer0_input = ReLU(mix_vec.reshape((curr_batch_size, 1, img_h, F)))
+        merge_vec = T.dot(words_tags, Q)  # batch * seqlen, F
+        layer0_input = ReLU(mix_vec + merge_vec).reshape((curr_batch_size, 1, img_h, F))
         img_w = F
 
     else:
