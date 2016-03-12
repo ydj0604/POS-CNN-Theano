@@ -164,6 +164,25 @@ def train_pos_cnn(datasets,
         layer0_input = ReLU(layer0_input_first + layer0_input_second)
         img_w = F
 
+    elif model == "mix":
+        print 'use mix...'
+        words = Words[T.cast(x.flatten(), dtype="int32")].reshape((curr_batch_size*img_h, Words.shape[1]))
+        tags = Tags[T.cast(z.flatten(), dtype="int32")].reshape((curr_batch_size*img_h, Tags.shape[1]))
+        words_tags = T.concatenate([words, tags], 1)  # batch * seqlen, D+M
+        tags_words = T.concatenate([tags, words], 1)  # batch * seqlen, D+M
+        concat_dim = W.shape[1] + P.shape[1]
+        F = W.shape[1]
+        Q = theano.shared(np.asarray(rng.uniform(low=-0.01,
+                                                 high=0.01,
+                                                 size=[concat_dim, F, concat_dim]),  # D+M, D, D+M
+                                     dtype=theano.config.floatX),
+                          borrow=True,
+                          name="V")
+        words_tags_Q = T.tensordot(words_tags, Q, [[1], [0]])  # batch * seqlen, D(final), D+M
+        mix_vec = T.batched_dot(words_tags_Q, tags_words)  # batch * seqlen, D
+        layer0_input = ReLU(mix_vec.reshape((curr_batch_size, 1, img_h, F)))
+        img_w = F
+
     else:
         print "invalid model"
         sys.exit()
@@ -446,7 +465,7 @@ def get_command_line_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--dataset', type=str, default='trec',
                         help='which dataset to use')
-    parser.add_argument('--model', type=str, default='tensor',
+    parser.add_argument('--model', type=str, default='mix',
                         help='which model to use')
     parser.add_argument('--num_repetitions', type=int, default=1,
                         help="how many times to run (for datasets that don't use k folds)")
