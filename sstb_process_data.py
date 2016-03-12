@@ -87,7 +87,7 @@ def build_data_cv(data_file, all_phrases, min_len=3):
                              "text": ' '.join(text),
                              "tag": ' '.join(tag),
                              "num_words": len(text),
-                             "split": get_split_num(split)}
+                             "split": get_split_num('train')}
                 revs.append(rev_datum)
 
             print "{} sentences in phrases".format(count)
