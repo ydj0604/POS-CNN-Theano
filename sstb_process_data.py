@@ -27,19 +27,50 @@ def build_data_cv(data_file, all_phrases, min_len=3):
         'pos-tag/stanford-postagger.jar',
         'utf8', False, '-mx2000m')
     splits = ['train', 'test', 'dev']
+    sentence_set = set()
 
     for split in splits:
-        if split == 'train' and all_phrases:
-            split = 'train_phrases'
         with open(data_file.format(split), "rb") as f:
             reader = csv.reader(f)
             revs_text = []
             sents = []
             for row in reader:
                 rev, sent = row[0], int(row[1])
+                sentence_set.add(rev)
                 rev = clean_str_sst(rev)
                 rev_tokens = rev.split()
-                if split == 'train_phrases' and len(rev_tokens) < min_len:
+                revs_text.append(rev_tokens)
+                sents.append(sent)
+            revs_tagged = pos_tagger.tag_sents(revs_text)
+            for i in range(len(revs_tagged)):
+                rev_tagged = revs_tagged[i]
+                text = list(zip(*rev_tagged)[0])
+                tag = list(zip(*rev_tagged)[1])
+                for word in set(text):
+                    vocab[word] += 1
+                for postag in set(tag):
+                    pos_vocab[postag] += 1
+                rev_datum = {"y": sents[i],
+                             "text": ' '.join(text),
+                             "tag": ' '.join(tag),
+                             "num_words": len(text),
+                             "split": get_split_num(split)}
+                revs.append(rev_datum)
+
+    if all_phrases:
+        with open(data_file.format("train_phrases"), "rb") as f:
+            reader = csv.reader(f)
+            revs_text = []
+            sents = []
+            count = 0
+            for row in reader:
+                rev, sent = row[0], int(row[1])
+                if rev in sentence_set:
+                    count += 1
+                    continue
+                rev = clean_str_sst(rev)
+                rev_tokens = rev.split()
+                if len(rev_tokens) < min_len:
                     continue
                 revs_text.append(rev_tokens)
                 sents.append(sent)
@@ -58,6 +89,8 @@ def build_data_cv(data_file, all_phrases, min_len=3):
                              "num_words": len(text),
                              "split": get_split_num(split)}
                 revs.append(rev_datum)
+
+            print "{} sentences in phrases".format(count)
 
     return revs, vocab, pos_vocab
 
@@ -115,7 +148,7 @@ if __name__ == "__main__":
     data_file = "sstb/sstb_condensed_{}.csv"
 
     if len(sys.argv) < 2 or sys.argv[1] == 'reviews':
-        all_phrases = False
+        all_phrases = True
     elif sys.argv[1] == 'phrases':
         all_phrases = True
     else:
