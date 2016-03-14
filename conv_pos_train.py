@@ -320,6 +320,8 @@ def train_pos_cnn(datasets,
     best_val_perf = 0
     best_test_perf = 0
     best_epoch = 0
+    num_epochs_decrease = 0
+    prev_val_perf = 0
 
     while epoch < n_epochs:
         start_time = time.time()
@@ -340,11 +342,22 @@ def train_pos_cnn(datasets,
 
         print 'epoch: {}, time: {} secs, train: {}, val: {}, test: {}'\
             .format(epoch, time.time() - start_time, train_perf * 100., val_perf * 100., test_perf * 100.)
+
         if val_perf > best_val_perf or (val_perf == best_val_perf and test_perf > best_test_perf):
             best_val_perf = val_perf
             best_test_perf = test_perf
             best_epoch = epoch
-    return best_test_perf, best_epoch
+
+        # early stop
+        if val_perf < prev_val_perf:
+            num_epochs_decrease += 1
+        else:
+            num_epochs_decrease = 0
+        if num_epochs_decrease >= 3:
+            break
+        prev_val_perf = val_perf
+
+    return best_test_perf, best_val_perf, best_epoch
 
 
 def shared_dataset(data_xyz, borrow=True):
@@ -524,19 +537,21 @@ if __name__=="__main__":
         elif args.dataset == 'sstb':
             datasets = make_idx_data_sstb(revs, word_idx_map, pos_idx_map, max_l=max_len, filter_h=5)
         print "train/val/test set: {}/{}/{}".format(len(datasets[0]), len(datasets[1]), len(datasets[2]))
-        best_test, best_epoch = train_pos_cnn(datasets,
-                                              W,  # use pre-trained word embeddings
-                                              P,  # use pre-trained pos embeddings
-                                              filter_hs=[3, 4, 5],
-                                              hidden_units=[100, num_classes],
-                                              dropout_rate=[0.5],
-                                              n_epochs=args.num_epochs,
-                                              batch_size=50,
-                                              lr_decay=0.95,
-                                              conv_non_linear="relu",
-                                              activations=[Iden],
-                                              sqr_norm_lim=9,
-                                              model=args.model)
-        print "cv: {}, perf: {}, epoch: {}".format(i, best_test, best_epoch)
+        best_test, best_val, best_epoch = train_pos_cnn(datasets,
+                                                        W,  # use pre-trained word embeddings
+                                                        P,  # use pre-trained pos embeddings
+                                                        filter_hs=[3, 4, 5],
+                                                        hidden_units=[100, num_classes],
+                                                        dropout_rate=[0.5],
+                                                        n_epochs=args.num_epochs,
+                                                        batch_size=50,
+                                                        lr_decay=0.95,
+                                                        conv_non_linear="relu",
+                                                        activations=[Iden],
+                                                        sqr_norm_lim=9,
+                                                        model=args.model)
+        print "cv: {}, test: {}, val: {}, epoch: {}".format(i, best_test, best_val, best_epoch)
         test_results.append(best_test)
-    print "final perf: {}".format(np.mean(test_results))
+    print "best perf: {}".format(np.max(test_results))
+    print "mean perf: {}".format(np.mean(test_results))
+    print "variance: {}".format(np.var(test_results))
