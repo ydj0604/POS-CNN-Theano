@@ -554,7 +554,7 @@ if __name__=="__main__":
         print "cv: {}, test: {}, val: {}, epoch: {}".format(i, best_test, best_val, best_epoch)
         test_results.append(best_test)
         val_results.append(best_val)
-    print "test results: " + test_results
-    print "val  results: " + val_results
+    print "test results: " + str(test_results)
+    print "val  results: " + str(val_results)
     print "mean perf: {}".format(np.mean(test_results))
     print "variance: {}".format(np.var(test_results))
