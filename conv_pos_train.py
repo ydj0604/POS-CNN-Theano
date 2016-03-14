@@ -529,6 +529,7 @@ if __name__=="__main__":
     # start training
     num_folds = args.num_repetitions if num_folds == 1 else num_folds
     test_results = []
+    val_results = []
     for i in range(num_folds):
         if args.dataset == 'trec':
             datasets = make_idx_data_trec(revs, word_idx_map, pos_idx_map, max_l=max_len, filter_h=5)
@@ -552,6 +553,8 @@ if __name__=="__main__":
                                                         model=args.model)
         print "cv: {}, test: {}, val: {}, epoch: {}".format(i, best_test, best_val, best_epoch)
         test_results.append(best_test)
-    print "best perf: {}".format(np.max(test_results))
+        val_results.append(best_val)
+    print "test results: " + ", ".join(test_results)
+    print "val  results: " + ", ".join(val_results)
     print "mean perf: {}".format(np.mean(test_results))
     print "variance: {}".format(np.var(test_results))
