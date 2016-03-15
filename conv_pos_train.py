@@ -18,7 +18,7 @@ import time
 import pandas as pd
 import sys
 import argparse
-from conv_net_classes import MLPDropout, LeNetConvPoolLayer
+from conv_net_classes import MLPDropout, LeNetConvPoolLayer, _dropout_from_layer
 warnings.filterwarnings("ignore")
 
 
@@ -172,7 +172,7 @@ def train_pos_cnn(datasets,
         words_tags = T.concatenate([words, tags], 1)  # batch * seqlen, D+M
         tags_words = T.concatenate([tags, words], 1)  # batch * seqlen, D+M
         concat_dim = W.shape[1] + P.shape[1]
-        F = W.shape[1]
+        F = 150  # TODO: set final dim for each token
         V = theano.shared(np.asarray(rng.uniform(low=-0.01,
                                                  high=0.01,
                                                  size=[concat_dim, F, concat_dim]),  # D+M, F, D+M
@@ -198,6 +198,9 @@ def train_pos_cnn(datasets,
     else:
         print "invalid model"
         sys.exit()
+
+    # additional drop-out
+    layer0_input = _dropout_from_layer(rng, layer0_input, 0.3)  # TODO: set embedding dropout rate
 
     # set more variables
     filter_w = img_w  # filter width = input matrix width
@@ -494,7 +497,7 @@ def get_command_line_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--dataset', type=str, default='trec',
                         help='which dataset to use')
-    parser.add_argument('--model', type=str, default='mix',
+    parser.add_argument('--model', type=str, default='concat',
                         help='which model to use')
     parser.add_argument('--num_repetitions', type=int, default=1,
                         help="how many times to run (for datasets that don't use k folds)")
