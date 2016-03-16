@@ -19,6 +19,7 @@ import pandas as pd
 import sys
 import argparse
 from conv_net_classes import MLPDropout, LeNetConvPoolLayer, _dropout_from_layer
+from logger import Logger
 warnings.filterwarnings("ignore")
 
 
@@ -79,6 +80,7 @@ def train_pos_cnn(datasets,
     rng = np.random.RandomState(3435)
     img_h = (len(datasets[0][0]) - 1) / 2  # input height = seq len
     feature_maps = hidden_units[0]  # num filters
+    analysis_logger = Logger("log.txt")
 
     # EMBEDDING LAYER
     Words = theano.shared(value=W, name="Words")
@@ -325,6 +327,7 @@ def train_pos_cnn(datasets,
     best_epoch = 0
     num_epochs_decrease = 0
     prev_val_perf = 0
+    best_Tags = None
 
     while epoch < n_epochs:
         start_time = time.time()
@@ -350,6 +353,7 @@ def train_pos_cnn(datasets,
             best_val_perf = val_perf
             best_test_perf = test_perf
             best_epoch = epoch
+            best_Tags = Tags.container.data
 
         # early stop
         if val_perf < prev_val_perf:
@@ -360,6 +364,8 @@ def train_pos_cnn(datasets,
             break
         prev_val_perf = val_perf
 
+    analysis_logger.write(str(best_Tags))
+    analysis_logger.write('\n')
     return best_test_perf, best_val_perf, best_epoch
 
 
@@ -402,7 +408,8 @@ def sgd_updates_adadelta(params, cost, rho=0.95, epsilon=1e-6, norm_lim=9):
         step = -(T.sqrt(exp_su + epsilon) / T.sqrt(up_exp_sg + epsilon)) * gp
         updates[exp_su] = rho * exp_su + (1 - rho) * T.sqr(step)
         stepped_param = param + step
-        if (param.get_value(borrow=True).ndim == 2) and (param.name != 'Words'):
+        if (param.get_value(borrow=True).ndim == 2) and \
+                (param.name != 'Words' and param.name != 'Tags' and param.name != 'Q' and param.name != 'V'):
             col_norms = T.sqrt(T.sum(T.sqr(stepped_param), axis=0))
             desired_norms = T.clip(col_norms, 0, T.sqrt(norm_lim))
             scale = desired_norms / (1e-7 + col_norms)
