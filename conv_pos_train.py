@@ -201,9 +201,6 @@ def train_pos_cnn(datasets,
         print "invalid model"
         sys.exit()
 
-    # additional drop-out
-    layer0_input = _dropout_from_layer(rng, layer0_input, 0.3)  # TODO: set embedding dropout rate
-
     # set more variables
     filter_w = img_w  # filter width = input matrix width
 
