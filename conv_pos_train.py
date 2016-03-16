@@ -30,7 +30,7 @@ def train_pos_cnn(datasets,
                   filter_hs,
                   num_filters,
                   num_classes,
-                  dropout_rate,
+                  dropout_rates,
                   n_epochs,
                   batch_size,
                   lr_decay,
@@ -42,7 +42,7 @@ def train_pos_cnn(datasets,
     parameters = [("num_filters", num_filters),
                   ("num_classes", num_classes),
                   ("filter_types", filter_hs),
-                  ("dropout", dropout_rate),
+                  ("dropout", dropout_rates),
                   ("num_epochs", n_epochs),
                   ("batch_size", batch_size),
                   ("learn_decay", lr_decay),
@@ -70,7 +70,7 @@ def train_pos_cnn(datasets,
     analysis_logger = Logger("log.txt")
 
     # EMBEDDING LAYER
-    embedding_layer = EmbeddingLayer(rng, is_train, x, z, curr_batch_size, img_h, W, P, model)
+    embedding_layer = EmbeddingLayer(rng, is_train, x, z, curr_batch_size, img_h, W, P, model, dropout_rates[0])
     layer0_input = embedding_layer.output
     img_w = embedding_layer.final_token_dim  # img w = filter width = input matrix width
 
@@ -98,7 +98,7 @@ def train_pos_cnn(datasets,
     # OUTPUT LAYER (Dropout, Fully-Connected, Soft-Max)
     output_layer = MLPDropout(rng, input=layer1_input,
                               weight_matrix_shape=[feature_maps * len(filter_shapes), num_classes],
-                              dropout_rate=dropout_rate)
+                              dropout_rate=dropout_rates[1])
 
     # UPDATE
     params = output_layer.params + embedding_layer.params
@@ -405,7 +405,7 @@ if __name__=="__main__":
                                                         filter_hs=[3, 4, 5],
                                                         num_filters=100,
                                                         num_classes=num_classes,
-                                                        dropout_rate=0.5,
+                                                        dropout_rates=[0.4, 0.5],
                                                         n_epochs=args.num_epochs,
                                                         batch_size=50,
                                                         lr_decay=0.95,

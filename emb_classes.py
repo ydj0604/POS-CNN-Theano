@@ -20,7 +20,7 @@ def Iden(x):
 
 class EmbeddingLayer(object):
     """A multilayer perceptron with dropout"""
-    def __init__(self, rng, is_train, x, z, batch_size, img_h, W, P, model, window=5, dropout_rate=0.4):
+    def __init__(self, rng, is_train, x, z, batch_size, img_h, W, P, model, dropout_rate, window=5):
         # img_h = seq len
 
         self.Words = theano.shared(value=W, name="Words")
