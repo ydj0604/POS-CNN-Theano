@@ -18,7 +18,7 @@ import time
 import pandas as pd
 import sys
 import argparse
-from conv_net_classes import MLPDropout, LeNetConvPoolLayer, _dropout_from_layer
+from conv_net_classes import MLPDropout, LeNetConvPoolLayer
 from emb_classes import EmbeddingLayer
 from logger import Logger
 warnings.filterwarnings("ignore")
@@ -96,7 +96,7 @@ def train_pos_cnn(datasets,
     layer1_input = T.concatenate(layer1_inputs, 1)
 
     # OUTPUT LAYER (Dropout, Fully-Connected, Soft-Max)
-    output_layer = MLPDropout(rng, input=layer1_input,
+    output_layer = MLPDropout(rng, is_train, input=layer1_input,
                               weight_matrix_shape=[feature_maps * len(filter_shapes), num_classes],
                               dropout_rate=dropout_rates[1])
 
@@ -105,8 +105,7 @@ def train_pos_cnn(datasets,
     for conv_layer in conv_layers:
         params += conv_layer.params
     cost = output_layer.negative_log_likelihood(y)
-    dropout_cost = output_layer.dropout_negative_log_likelihood(y)  # use this to update
-    grad_updates = sgd_updates_adadelta(params, dropout_cost, lr_decay, 1e-6, sqr_norm_lim)
+    grad_updates = sgd_updates_adadelta(params, cost, lr_decay, 1e-6, sqr_norm_lim)
 
     ##########################
     #    dataset handling    #

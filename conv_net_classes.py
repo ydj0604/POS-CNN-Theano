@@ -31,14 +31,6 @@ def Iden(x):
     return(y)
 
 
-def _dropout_from_layer(rng, layer, p):
-    srng = theano.tensor.shared_randomstreams.RandomStreams(rng.randint(999999))
-    mask = srng.binomial(n=1, p=1-p, size=layer.shape)
-    output = T.switch(mask, layer, 0)
-    # output = layer * T.cast(mask, theano.config.floatX)
-    return output
-
-
 def dropout(rng, x, p, is_train):
     masked_x = None
     if p > 0.0 and p < 1.0:
@@ -59,32 +51,18 @@ def dropout(rng, x, p, is_train):
 
 
 class MLPDropout(object):
-    def __init__(self, rng, input, weight_matrix_shape, dropout_rate, use_bias=True):
+    def __init__(self, rng, is_train, input, weight_matrix_shape, dropout_rate, use_bias=True):
         # inputs
-        next_layer_input = input
-        next_dropout_layer_input = _dropout_from_layer(rng, input, p=dropout_rate)
+        next_layer_input = dropout(rng, input, dropout_rate, is_train)
 
         # Set up the output layer
         n_in, n_out = weight_matrix_shape
-        self.dropout_output_layer = LogisticRegression(input=next_dropout_layer_input, n_in=n_in, n_out=n_out)
-
-        # Again, reuse paramters in the dropout output.
-        self.output_layer = LogisticRegression(
-            input=next_layer_input,
-            # scale the weight matrix W with (1-p)
-            W=self.dropout_output_layer.W * (1 - dropout_rate),
-            b=self.dropout_output_layer.b,
-            n_in=n_in, n_out=n_out)
-
-        # Use the negative log likelihood of the logistic regression layer as the objective.
-        self.dropout_negative_log_likelihood = self.dropout_output_layer.negative_log_likelihood
-        self.dropout_errors = self.dropout_output_layer.errors
-
+        self.output_layer = LogisticRegression(input=next_layer_input, n_in=n_in, n_out=n_out)
         self.negative_log_likelihood = self.output_layer.negative_log_likelihood
         self.errors = self.output_layer.errors
 
         # Grab all the parameters together.
-        self.params = [param for param in self.dropout_output_layer.params]
+        self.params = [param for param in self.output_layer.params]
 
     def predict(self, new_input):
         p_y_given_x = T.nnet.softmax(T.dot(new_input, self.output_layer.W) + self.output_layer.b)
@@ -154,17 +132,3 @@ class LeNetConvPoolLayer(object):
             pooled_out = downsample.max_pool_2d(input=conv_out, ds=self.poolsize, ignore_border=True)
             self.output = pooled_out + self.b.dimshuffle('x', 0, 'x', 'x')
         self.params = [self.W, self.b]
-        
-    def predict(self, new_data, batch_size):
-        img_shape = (batch_size, 1, self.image_shape[2], self.image_shape[3])
-        conv_out = conv.conv2d(input=new_data, filters=self.W, filter_shape=self.filter_shape, image_shape=img_shape)
-        if self.non_linear == "tanh":
-            conv_out_tanh = T.tanh(conv_out + self.b.dimshuffle('x', 0, 'x', 'x'))
-            output = downsample.max_pool_2d(input=conv_out_tanh, ds=self.poolsize, ignore_border=True)
-        elif self.non_linear == "relu":
-            conv_out_relu = ReLU(conv_out + self.b.dimshuffle('x', 0, 'x', 'x'))
-            output = downsample.max_pool_2d(input=conv_out_relu, ds=self.poolsize, ignore_border=True)
-        else:
-            pooled_out = downsample.max_pool_2d(input=conv_out, ds=self.poolsize, ignore_border=True)
-            output = pooled_out + self.b.dimshuffle('x', 0, 'x', 'x')
-        return output
