@@ -49,7 +49,8 @@ def build_data_cv(data_file, all_phrases, binary, min_len=3):
                 if binary and sent == 2:  # skip neutral if binary
                     continue
                 rev = clean_str_sst(rev)
-                sentence_set.add(rev)
+                if split == 'train':
+                    sentence_set.add(rev)
                 rev_tokens = rev.split()
                 revs_text.append(rev_tokens)
                 sent = sentiment_label_for_binary(sent) if binary else sent  # check for binary case
