@@ -195,7 +195,7 @@ def train_pos_cnn(datasets,
     best_epoch = 0
     num_epochs_decrease = 0
     prev_val_perf = 0
-    best_Tags = None
+    final_Words, final_Tags = None, None
 
     while epoch < n_epochs:
         start_time = time.time()
@@ -221,7 +221,9 @@ def train_pos_cnn(datasets,
             best_val_perf = val_perf
             best_test_perf = test_perf
             best_epoch = epoch
-            best_Tags = embedding_layer.Tags.container.data
+            final_Words = embedding_layer.Words.container.data
+            final_Tags = embedding_layer.Tags.container.data
+            cPickle.dump([final_Words, final_Tags], open("final_embeddings", "wb"))
 
         # early stop
         if val_perf < prev_val_perf:
@@ -232,8 +234,6 @@ def train_pos_cnn(datasets,
             break
         prev_val_perf = val_perf
 
-    analysis_logger.write(str(best_Tags))
-    analysis_logger.write('\n')
     return best_test_perf, best_val_perf, best_epoch
 
 
