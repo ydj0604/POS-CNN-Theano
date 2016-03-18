@@ -148,7 +148,7 @@ if __name__ == "__main__":
     data_file = "sstb/sstb_condensed_{}.csv"
 
     if len(sys.argv) < 2 or sys.argv[1] == 'reviews':
-        all_phrases = True
+        all_phrases = False
     elif sys.argv[1] == 'phrases':
         all_phrases = True
     else:
