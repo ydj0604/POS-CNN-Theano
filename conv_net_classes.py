@@ -42,7 +42,7 @@ def dropout(rng, x, p, is_train):
             size=x.shape,
             dtype=theano.config.floatX
         )
-        # mask *= 1.0 / (1.0 - p)
+        mask *= 1.0 / (1.0 - p)
         # masked_x = x * mask
         masked_x = T.switch(mask, x, 0)
     else:
