@@ -375,7 +375,7 @@ def make_idx_data_sstb(revs, word_idx_map, pos_idx_map, max_l, filter_h):
             test.append(sent)
         else:
             val.append(sent)
-    train = np.array(train, dtype="int")
+    train = np.random.permutation(np.array(train, dtype="int"))
     test = np.array(test, dtype="int")
     val = np.array(val, dtype="int")
     return [train, val, test]
