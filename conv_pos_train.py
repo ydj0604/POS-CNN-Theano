@@ -359,7 +359,7 @@ def get_command_line_args():
                         help="how many times to run (for datasets that don't use k folds)")
     parser.add_argument('--num_epochs', type=int, default=25,
                         help="how many epochs")
-    parser.add_argument('--dump_emb', type=int, default=1,
+    parser.add_argument('--dump_emb', type=int, default=0,
                         help="dump embeddings or not")
     parser.add_argument('--pretrain', type=int, default=0,
                         help="use pretrained embeddings")
@@ -372,7 +372,7 @@ if __name__=="__main__":
     args = get_command_line_args()
 
     # load data
-    print "loading data...{}".format(args.dataset),
+    print "loading data...{}".format(args.dataset)
     if args.dataset == 'trec':
         x = cPickle.load(open("trec.p", "rb"))
     elif args.dataset == 'mr':
