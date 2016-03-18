@@ -19,6 +19,7 @@ import pandas as pd
 import sys
 import argparse
 from conv_net_classes import MLPDropout, LeNetConvPoolLayer
+from emb_classes import EmbeddingLayer
 warnings.filterwarnings("ignore")
 
 
@@ -74,6 +75,7 @@ def train_pos_cnn(datasets,
     y = T.ivector('y')  # labels
     z = T.matrix('z')  # tags
     curr_batch_size = T.lscalar()
+    is_train = T.iscalar('is_train')  # 1=train, 0=test
 
     # set necessary variables
     rng = np.random.RandomState(3435)
@@ -81,123 +83,9 @@ def train_pos_cnn(datasets,
     feature_maps = hidden_units[0]  # num filters
 
     # EMBEDDING LAYER
-    Words = theano.shared(value=W, name="Words")
-    Tags = theano.shared(value=P, name="Tags")
-    emb_layer_params = [Words] + [Tags]
-
-    if model == "concat":
-        print 'use concat...'
-        layer0_input_words = Words[T.cast(x.flatten(), dtype="int32")].reshape((curr_batch_size, 1, img_h, Words.shape[1]))
-        layer0_input_tags = Tags[T.cast(z.flatten(), dtype="int32")].reshape((curr_batch_size, 1, img_h, Tags.shape[1]))
-        layer0_input = T.concatenate([layer0_input_words, layer0_input_tags], 3)  # curr_batch_size, 1, img_h, D+M
-        img_w = W.shape[1] + P.shape[1]
-
-    elif model == "mult":
-        print 'use mult...'
-        window = 5  # TODO: set window size !!!
-        CW = Words[T.cast(x.flatten(), dtype="int32")].reshape((curr_batch_size, 1, img_h, Words.shape[1]))
-        CP = Tags[T.cast(z.flatten(), dtype="int32")].reshape((curr_batch_size, img_h, Tags.shape[1]))
-        left_pad = CP[:, CP.shape[1]-int(window/2):, :]
-        right_pad = CP[:, :int(window/2), :]
-        CP_padded = T.concatenate([left_pad, CP, right_pad], 1)  # batch, seq+w, M
-        CP_stack_list = []
-        for k in range(window):
-            CP_stack_list.append(CP_padded[:, k:k+img_h, :])  # batch, seq, M
-        CP_stack = T.concatenate(CP_stack_list, 2)  # batch, seq, M*w
-        CP_stack = CP_stack.reshape((curr_batch_size, 1, img_h, Tags.shape[1]*window))  # batch, 1, seq, M*w
-        CW_CP = T.concatenate([CW, CP_stack], 3)  # batch, 1, seqlen, w*M+D
-        F = W.shape[1] + P.shape[1]  # TODO: set F, final dim to represent each token !!!
-        Q = theano.shared(np.asarray(rng.uniform(low=-0.01,
-                                                 high=0.01,
-                                                 size=[W.shape[1] + P.shape[1]*window, F]),
-                                     dtype=theano.config.floatX),
-                          borrow=True,
-                          name="Q")
-        emb_layer_params += [Q]  # add Q to the list of params to train
-        layer0_input = ReLU(T.dot(CW_CP, Q))  # curr_batch_size, 1, img_h, F
-        img_w = F
-
-    elif model == "tensor":
-        print 'use tensor...'
-        window = 5  # TODO: set window size !!!
-        CW = Words[T.cast(x.flatten(), dtype="int32")].reshape((curr_batch_size, img_h, Words.shape[1]))
-        CP = Tags[T.cast(z.flatten(), dtype="int32")].reshape((curr_batch_size, img_h, Tags.shape[1]))
-        left_pad = CP[:, CP.shape[1]-int(window/2):, :]
-        right_pad = CP[:, :int(window/2), :]
-        CP_padded = T.concatenate([left_pad, CP, right_pad], 1)  # batch, seq+w, M
-        CP_stack_list = []
-        for k in range(window):
-            CP_stack_list.append(CP_padded[:, k:k+img_h, :])  # batch, seq, M
-        CP_stack = T.concatenate(CP_stack_list, 2)  # batch, seqlen, w*M
-
-        # first term
-        CW_CP = T.concatenate([CW, CP_stack], 2)  # batch, seqlen, w*M+D
-        concat_dim = W.shape[1] + P.shape[1]*window
-        F = 125  # TODO: set F; final dim for each token !!!
-        V = theano.shared(np.asarray(rng.uniform(low=-0.01,
-                                                 high=0.01,
-                                                 size=[concat_dim, F, concat_dim]),
-                                     dtype=theano.config.floatX),
-                          borrow=True,
-                          name="V")
-        emb_layer_params += [V]  # add Q to the list of params to train
-        CW_CP_V = T.tensordot(CW_CP, V, [[2], [0]])  # batch, seqlen, F, w*M+D
-        CP_CW = T.concatenate([CP_stack, CW], 2)  # batch, seqlen, w*M+D
-        CW_CP_V_re = CW_CP_V.reshape((curr_batch_size*img_h, F, concat_dim))  # batch*seqlen, F, w*M+D
-        CP_CW_re = CP_CW.reshape((curr_batch_size*img_h, concat_dim))  # batch*seqlen, W*M+D
-        result = T.batched_dot(CW_CP_V_re, CP_CW_re)  # batch*seqlen, F
-        result = result.reshape((curr_batch_size, img_h, F))  # batch, seqlen, F
-        layer0_input_first = result.reshape((curr_batch_size, 1, img_h, F))  # batch, 1, seqlen, F
-
-        # second term
-        CP_stack_re = CP_stack.reshape((curr_batch_size, 1, img_h, Tags.shape[1]*window))  # batch, 1, seq, M*w
-        CW_re = CW.reshape((curr_batch_size, 1, img_h, Words.shape[1]))
-        CW_CP_re = T.concatenate([CW_re, CP_stack_re], 3)  # batch, 1, seqlen, w*M+D
-        Q = theano.shared(np.asarray(rng.uniform(low=-0.01,
-                                                 high=0.01,
-                                                 size=[concat_dim, F]),
-                                     dtype=theano.config.floatX),
-                          borrow=True,
-                          name="Q")
-        emb_layer_params += [Q]  # add Q to the list of params to train
-        layer0_input_second = T.dot(CW_CP_re, Q)  # curr_batch_size, 1, img_h, F
-        layer0_input = ReLU(layer0_input_first + layer0_input_second)
-        img_w = F
-
-    elif model == "mix":
-        print 'use mix...'
-        # first term
-        words = Words[T.cast(x.flatten(), dtype="int32")].reshape((curr_batch_size*img_h, Words.shape[1]))
-        tags = Tags[T.cast(z.flatten(), dtype="int32")].reshape((curr_batch_size*img_h, Tags.shape[1]))
-        words_tags = T.concatenate([words, tags], 1)  # batch * seqlen, D+M
-        tags_words = T.concatenate([tags, words], 1)  # batch * seqlen, D+M
-        concat_dim = W.shape[1] + P.shape[1]
-        F = W.shape[1]
-        V = theano.shared(np.asarray(rng.uniform(low=-0.01,
-                                                 high=0.01,
-                                                 size=[concat_dim, F, concat_dim]),  # D+M, F, D+M
-                                     dtype=theano.config.floatX),
-                          borrow=True,
-                          name="V")
-        emb_layer_params += [V]
-        words_tags_V = T.tensordot(words_tags, V, [[1], [0]])  # batch * seqlen, F, D+M
-        mix_vec = T.batched_dot(words_tags_V, tags_words)  # batch * seqlen, F
-
-        # second term
-        Q = theano.shared(np.asarray(rng.uniform(low=-0.01,
-                                                 high=0.01,
-                                                 size=[concat_dim, F]),
-                                     dtype=theano.config.floatX),
-                          borrow=True,
-                          name="Q")
-        emb_layer_params += [Q]
-        merge_vec = T.dot(words_tags, Q)  # batch * seqlen, F
-        layer0_input = ReLU(mix_vec + merge_vec).reshape((curr_batch_size, 1, img_h, F))
-        img_w = F
-
-    else:
-        print "invalid model"
-        sys.exit()
+    embedding_layer = EmbeddingLayer(rng, is_train, x, z, curr_batch_size, img_h, W, P, model, 0.0)
+    layer0_input = embedding_layer.output
+    img_w = embedding_layer.final_token_dim  # img w = filter width = input matrix width
 
     # set more variables
     filter_w = img_w  # filter width = input matrix width
@@ -232,10 +120,9 @@ def train_pos_cnn(datasets,
                             dropout_rates=dropout_rate)
 
     # UPDATE
-    params = classifier.params
+    params = classifier.params + embedding_layer.params
     for conv_layer in conv_layers:
         params += conv_layer.params
-    params += emb_layer_params
     cost = classifier.negative_log_likelihood(y)
     dropout_cost = classifier.dropout_negative_log_likelihood(y)  # use this to update
     grad_updates = sgd_updates_adadelta(params, dropout_cost, lr_decay, 1e-6, sqr_norm_lim)
@@ -281,34 +168,38 @@ def train_pos_cnn(datasets,
     print 'preparing theano functions...'
     zero_vec_tensor = T.vector()
     set_zero_word = theano.function([zero_vec_tensor],
-                                    updates=[(Words, T.set_subtensor(Words[0, :], zero_vec_tensor))],
+                                    updates=[(embedding_layer.Words, T.set_subtensor(embedding_layer.Words[0, :], zero_vec_tensor))],
                                     allow_input_downcast=True)
     set_zero_pos = theano.function([zero_vec_tensor],
-                                   updates=[(Tags, T.set_subtensor(Tags[0, :], zero_vec_tensor))],
+                                   updates=[(embedding_layer.Tags, T.set_subtensor(embedding_layer.Tags[0, :], zero_vec_tensor))],
                                    allow_input_downcast=True)
     val_model = theano.function([index, curr_batch_size], classifier.errors(y),
                                 givens={
                                     x: val_set_x[index * batch_size: (index + 1) * batch_size],
                                     y: val_set_y[index * batch_size: (index + 1) * batch_size],
-                                    z: val_set_z[index * batch_size: (index + 1) * batch_size]},
+                                    z: val_set_z[index * batch_size: (index + 1) * batch_size],
+                                    is_train: np.cast['int32'](0)},
                                 allow_input_downcast=True)
     train_eval_model = theano.function([index, curr_batch_size], classifier.errors(y),
                                  givens={
                                      x: train_set_x[index * batch_size: (index + 1) * batch_size],
                                      y: train_set_y[index * batch_size: (index + 1) * batch_size],
-                                     z: train_set_z[index * batch_size: (index + 1) * batch_size]},
+                                     z: train_set_z[index * batch_size: (index + 1) * batch_size],
+                                     is_train: np.cast['int32'](0)},
                                  allow_input_downcast=True)
     train_model = theano.function([index, curr_batch_size], cost, updates=grad_updates,
                                   givens={
                                       x: train_set_x[index*batch_size:(index+1)*batch_size],
                                       y: train_set_y[index*batch_size:(index+1)*batch_size],
-                                      z: train_set_z[index*batch_size:(index+1)*batch_size]},
+                                      z: train_set_z[index*batch_size:(index+1)*batch_size],
+                                      is_train: np.cast['int32'](1)},
                                   allow_input_downcast=True)
     test_model = theano.function([index, curr_batch_size], classifier.errors(y),
                                  givens={
                                      x: test_set_x[index * batch_size: (index + 1) * batch_size],
                                      y: test_set_y[index * batch_size: (index + 1) * batch_size],
-                                     z: test_set_z[index * batch_size: (index + 1) * batch_size]},
+                                     z: test_set_z[index * batch_size: (index + 1) * batch_size],
+                                     is_train: np.cast['int32'](0)},
                                  allow_input_downcast=True)
 
     ##########################
@@ -492,9 +383,9 @@ def make_idx_data_sstb(revs, word_idx_map, pos_idx_map, max_l, filter_h):
 
 def get_command_line_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--dataset', type=str, default='trec',
+    parser.add_argument('--dataset', type=str, default='sstb',
                         help='which dataset to use')
-    parser.add_argument('--model', type=str, default='mix',
+    parser.add_argument('--model', type=str, default='concat',
                         help='which model to use')
     parser.add_argument('--num_repetitions', type=int, default=1,
                         help="how many times to run (for datasets that don't use k folds)")
