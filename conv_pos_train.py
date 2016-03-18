@@ -421,6 +421,7 @@ if __name__=="__main__":
                                                                                    model=args.model)
         print "cv: {}, test: {}, val: {}, epoch: {}".format(i, best_test, best_val, best_epoch)
         if args.dump_emb and (len(test_results) == 0 or best_test > max(test_results)):
+            print 'dump embedding file'
             cPickle.dump([final_Words, final_Tags], open("final_embeddings_{}.p".format(args.dataset), "wb"))
         test_results.append(best_test)
         val_results.append(best_val)
