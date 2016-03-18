@@ -18,7 +18,17 @@ def get_split_num(split):
     return -1
 
 
-def build_data_cv(data_file, all_phrases, min_len=4):
+def sentiment_label_for_binary(sentiment):
+    if sentiment < 2:
+        return 0  # negative
+    elif sentiment > 2:
+        return 1  # positive
+    else:
+        print "invalid sentiment for binary case"
+        sys.exit()
+
+
+def build_data_cv(data_file, all_phrases, binary, min_len=4):
     revs = []
     vocab = defaultdict(float)
     pos_vocab = defaultdict(float)
@@ -36,10 +46,14 @@ def build_data_cv(data_file, all_phrases, min_len=4):
             sents = []
             for row in reader:
                 rev, sent = row[0], int(row[1])
-                sentence_set.add(rev)
+                if binary and sent == 2:  # skip neutral if binary
+                    continue
                 rev = clean_str_sst(rev)
+                if split == 'train':
+                    sentence_set.add(rev)
                 rev_tokens = rev.split()
                 revs_text.append(rev_tokens)
+                sent = sentiment_label_for_binary(sent) if binary else sent  # check for binary case
                 sents.append(sent)
             revs_tagged = pos_tagger.tag_sents(revs_text)
             for i in range(len(revs_tagged)):
@@ -65,14 +79,17 @@ def build_data_cv(data_file, all_phrases, min_len=4):
             count = 0
             for row in reader:
                 rev, sent = row[0], int(row[1])
+                rev = clean_str_sst(rev)
                 if rev in sentence_set:
                     count += 1
                     continue
-                rev = clean_str_sst(rev)
+                if binary and sent == 2:  # skip neutral if binary
+                    continue
                 rev_tokens = rev.split()
                 if len(rev_tokens) < min_len:
                     continue
                 revs_text.append(rev_tokens)
+                sent = sentiment_label_for_binary(sent) if binary else sent  # check for binary case
                 sents.append(sent)
             revs_tagged = pos_tagger.tag_sents(revs_text)
             for i in range(len(revs_tagged)):
@@ -147,16 +164,15 @@ if __name__ == "__main__":
     pos_emb_file = "data/1billion-pos-24.bin"
     data_file = "sstb/sstb_condensed_{}.csv"
 
-    if len(sys.argv) < 2 or sys.argv[1] == 'reviews':
-        all_phrases = False
-    elif sys.argv[1] == 'phrases':
-        all_phrases = True
+    if len(sys.argv) < 3:
+        arg1, arg2 = 'reviews', 'fine-grained'
     else:
-        print 'invalid argument'
-        sys.exit()
+        arg1, arg2 = sys.argv[1], sys.argv[2]
+    all_phrases = True if arg1 == 'phrases' else False
+    binary_case = True if arg2 == 'binary' else False
 
     print "loading sstb data...",
-    revs, vocab, pos_vocab = build_data_cv(data_file, all_phrases)
+    revs, vocab, pos_vocab = build_data_cv(data_file, all_phrases, binary_case)
     max_l = np.max(pd.DataFrame(revs)["num_words"])
     print "data loaded!"
     print "number of sentences: " + str(len(revs))
