@@ -412,7 +412,7 @@ if __name__=="__main__":
                                                                                    filter_hs=[3, 4, 5],
                                                                                    num_filters=100,
                                                                                    num_classes=num_classes,
-                                                                                   dropout_rates=[0.4, 0.5],
+                                                                                   dropout_rates=[0.0, 0.5],
                                                                                    n_epochs=args.num_epochs,
                                                                                    batch_size=50,
                                                                                    lr_decay=0.95,
