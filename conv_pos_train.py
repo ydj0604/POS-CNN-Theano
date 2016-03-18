@@ -223,7 +223,6 @@ def train_pos_cnn(datasets,
             best_epoch = epoch
             final_Words = embedding_layer.Words.container.data
             final_Tags = embedding_layer.Tags.container.data
-            cPickle.dump([final_Words, final_Tags], open("final_embeddings.p", "wb"))
 
         # early stop
         if val_perf < prev_val_perf:
@@ -234,7 +233,7 @@ def train_pos_cnn(datasets,
             break
         prev_val_perf = val_perf
 
-    return best_test_perf, best_val_perf, best_epoch
+    return best_test_perf, best_val_perf, best_epoch, (final_Words, final_Tags)
 
 
 def shared_dataset(data_xyz, borrow=True):
@@ -360,6 +359,10 @@ def get_command_line_args():
                         help="how many times to run (for datasets that don't use k folds)")
     parser.add_argument('--num_epochs', type=int, default=25,
                         help="how many epochs")
+    parser.add_argument('--dump_emb', type=int, default=1,
+                        help="dump embeddings or not")
+    parser.add_argument('--pretrain', type=int, default=0,
+                        help="use pretrained embeddings")
     args = parser.parse_args()
     return args
 
@@ -381,6 +384,11 @@ if __name__=="__main__":
         sys.exit()
     revs, W, W_rand, word_idx_map, vocab, P, P_rand, pos_idx_map, num_folds, num_classes = x
     max_len = np.max(pd.DataFrame(revs)["num_words"])
+    if args.pretrain:
+        print 'use pretrained embeddings'
+        x = cPickle.load(open("final_embeddings_{}.p".format(args.dataset), "rb"))
+        W, P = x
+
     print "data loaded!"
 
     # import conv net classes
@@ -398,22 +406,25 @@ if __name__=="__main__":
         elif args.dataset == 'sstb':
             datasets = make_idx_data_sstb(revs, word_idx_map, pos_idx_map, max_l=max_len, filter_h=5)
         print "train/val/test set: {}/{}/{}".format(len(datasets[0]), len(datasets[1]), len(datasets[2]))
-        best_test, best_val, best_epoch = train_pos_cnn(datasets,
-                                                        W,  # use pre-trained word embeddings
-                                                        P,  # use pre-trained pos embeddings
-                                                        filter_hs=[3, 4, 5],
-                                                        num_filters=100,
-                                                        num_classes=num_classes,
-                                                        dropout_rates=[0.4, 0.5],
-                                                        n_epochs=args.num_epochs,
-                                                        batch_size=50,
-                                                        lr_decay=0.95,
-                                                        conv_non_linear="relu",
-                                                        sqr_norm_lim=9,
-                                                        model=args.model)
+        best_test, best_val, best_epoch, (final_Words, final_Tags) = train_pos_cnn(datasets,
+                                                                                   W,  # use pre-trained word embeddings
+                                                                                   P,  # use pre-trained pos embeddings
+                                                                                   filter_hs=[3, 4, 5],
+                                                                                   num_filters=100,
+                                                                                   num_classes=num_classes,
+                                                                                   dropout_rates=[0.4, 0.5],
+                                                                                   n_epochs=args.num_epochs,
+                                                                                   batch_size=50,
+                                                                                   lr_decay=0.95,
+                                                                                   conv_non_linear="relu",
+                                                                                   sqr_norm_lim=9,
+                                                                                   model=args.model)
         print "cv: {}, test: {}, val: {}, epoch: {}".format(i, best_test, best_val, best_epoch)
+        if args.dump_emb and best_test > max(test_results):
+            cPickle.dump([final_Words, final_Tags], open("final_embeddings_{}.p".format(args.dataset), "wb"))
         test_results.append(best_test)
         val_results.append(best_val)
+
     print "test results: " + str(test_results)
     print "val  results: " + str(val_results)
     print "mean perf: {}".format(np.mean(test_results))
