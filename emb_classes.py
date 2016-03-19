@@ -39,12 +39,19 @@ class EmbeddingLayer(object):
     def __init__(self, rng, is_train, x, z, batch_size, img_h, W, P, model, dropout_rate, window=5):
         # img_h = seq len
 
-        self.Words = theano.shared(value=W, name="Words")
-        self.Tags = theano.shared(value=P, name="Tags")
-        self.params = [self.Words, self.Tags]
+        if model == 'notag':
+            print 'no tags...'
+            self.Words = theano.shared(value=W, name="Words")
+            self.params = [self.Words]
+            self.output = self.Words[T.cast(x.flatten(), dtype="int32")]\
+                .reshape((batch_size, 1, img_h, self.Words.shape[1]))
+            self.final_token_dim = W.shape[1]
 
         if model == 'concat':
             print 'use concat...'
+            self.Words = theano.shared(value=W, name="Words")
+            self.Tags = theano.shared(value=P, name="Tags")
+            self.params = [self.Words, self.Tags]
             layer0_input_words = self.Words[T.cast(x.flatten(), dtype="int32")]\
                 .reshape((batch_size, 1, img_h, self.Words.shape[1]))
             layer0_input_tags = self.Tags[T.cast(z.flatten(), dtype="int32")]\
@@ -55,6 +62,9 @@ class EmbeddingLayer(object):
 
         elif model == 'mult':
             print 'use mult...'
+            self.Words = theano.shared(value=W, name="Words")
+            self.Tags = theano.shared(value=P, name="Tags")
+            self.params = [self.Words, self.Tags]
             CW = self.Words[T.cast(x.flatten(), dtype="int32")].reshape((batch_size, 1, img_h, self.Words.shape[1]))
             CP = self.Tags[T.cast(z.flatten(), dtype="int32")].reshape((batch_size, img_h, self.Tags.shape[1]))
             left_pad = CP[:, CP.shape[1]-int(window/2):, :]
@@ -82,6 +92,9 @@ class EmbeddingLayer(object):
         elif model == 'tensor':
             print 'use tensor...'
             # first term
+            self.Words = theano.shared(value=W, name="Words")
+            self.Tags = theano.shared(value=P, name="Tags")
+            self.params = [self.Words, self.Tags]
             words = self.Words[T.cast(x.flatten(), dtype="int32")].reshape((batch_size*img_h, self.Words.shape[1]))
             tags = self.Tags[T.cast(z.flatten(), dtype="int32")].reshape((batch_size*img_h, self.Tags.shape[1]))
             words_tags = T.concatenate([words, tags], 1)  # batch * seqlen, D+M
