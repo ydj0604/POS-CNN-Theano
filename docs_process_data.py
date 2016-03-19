@@ -123,7 +123,7 @@ if __name__ == "__main__":
     yelp2013_path = "docs/yelp-2013-seg-20-20.{}.ss"
     yelp2014_path = "docs/yelp-2014-seg-20-20.{}.ss"
 
-    if len(sys.argv) < 2 or sys.argv[1] == 'imdb':
+    if sys.argv[1] == 'imdb':
         data_file = imdb_path
     elif sys.argv[1] == 'yelp2013':
         data_file = yelp2013_path
