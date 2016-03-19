@@ -407,6 +407,12 @@ if __name__=="__main__":
         x = cPickle.load(open("mr.p", "rb"))
     elif args.dataset == 'sstb':
         x = cPickle.load(open("sstb.p", "rb"))
+    elif args.dataset == 'imdb':
+        x = cPickle.load(open("imdb.p", "rb"))
+    elif args.dataset == 'yelp2013':
+        x = cPickle.load(open("yelp2013.p", "rb"))
+    elif args.dataset == 'yelp2014':
+        x = cPickle.load(open("yelp2014.p", "rb"))
     else:
         print "invalid dataset"
         sys.exit()
@@ -426,6 +432,8 @@ if __name__=="__main__":
         elif args.dataset == 'mr':
             datasets = make_idx_data_mr(revs, word_idx_map, pos_idx_map, cv=i, max_l=max_len, filter_h=5)
         elif args.dataset == 'sstb':
+            datasets = make_idx_data_sstb(revs, word_idx_map, pos_idx_map, max_l=max_len, filter_h=5)
+        else:  # docs
             datasets = make_idx_data_sstb(revs, word_idx_map, pos_idx_map, max_l=max_len, filter_h=5)
         print "train/val/test set: {}/{}/{}".format(len(datasets[0]), len(datasets[1]), len(datasets[2]))
         best_test, best_val, best_epoch = train_pos_cnn(datasets,
