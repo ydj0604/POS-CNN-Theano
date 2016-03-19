@@ -47,7 +47,7 @@ class EmbeddingLayer(object):
                 .reshape((batch_size, 1, img_h, self.Words.shape[1]))
             self.final_token_dim = W.shape[1]
 
-        if model == 'concat':
+        elif model == 'concat':
             print 'use concat...'
             self.Words = theano.shared(value=W, name="Words")
             self.Tags = theano.shared(value=P, name="Tags")
