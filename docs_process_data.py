@@ -34,7 +34,7 @@ def build_data_cv(data_file):
     pos_tagger = StanfordPOSTagger(
         'pos-tag/english-left3words-distsim.tagger',
         'pos-tag/stanford-postagger.jar',
-        'utf8', False, '-mx2000m')
+        'utf8', False, '-mx6000m')
     splits = ['train', 'test', 'dev']
 
     for split in splits:
