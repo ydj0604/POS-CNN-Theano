@@ -413,6 +413,8 @@ if __name__=="__main__":
         x = cPickle.load(open("yelp2013.p", "rb"))
     elif args.dataset == 'yelp2014':
         x = cPickle.load(open("yelp2014.p", "rb"))
+    elif args.dataset == 'yelp2013-2':
+        x = cPickle.load(open("yelp2013-2.p", "rb"))
     else:
         print "invalid dataset"
         sys.exit()
