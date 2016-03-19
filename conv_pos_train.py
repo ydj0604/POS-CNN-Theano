@@ -170,9 +170,10 @@ def train_pos_cnn(datasets,
     set_zero_word = theano.function([zero_vec_tensor],
                                     updates=[(embedding_layer.Words, T.set_subtensor(embedding_layer.Words[0, :], zero_vec_tensor))],
                                     allow_input_downcast=True)
-    set_zero_pos = theano.function([zero_vec_tensor],
-                                   updates=[(embedding_layer.Tags, T.set_subtensor(embedding_layer.Tags[0, :], zero_vec_tensor))],
-                                   allow_input_downcast=True)
+    if model != 'notag':
+        set_zero_pos = theano.function([zero_vec_tensor],
+                                       updates=[(embedding_layer.Tags, T.set_subtensor(embedding_layer.Tags[0, :], zero_vec_tensor))],
+                                       allow_input_downcast=True)
     val_model = theano.function([index, curr_batch_size], classifier.errors(y),
                                 givens={
                                     x: val_set_x[index * batch_size: (index + 1) * batch_size],
