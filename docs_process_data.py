@@ -164,5 +164,7 @@ if __name__ == "__main__":
     add_unknown_words(rand_vecs, pos_vocab, k=p2v_dim)
     P_rand, _ = get_W(rand_vecs, k=p2v_dim)
 
-    cPickle.dump([revs, W, W_rand, word_idx_map, vocab, P, P_rand, pos_idx_map, 1, 5], open("imdb.p", "wb"))
+    num_classes = 10 if sys.argv[1] == 'imdb' else 5
+
+    cPickle.dump([revs, W, W_rand, word_idx_map, vocab, P, P_rand, pos_idx_map, 1, num_classes], open("imdb.p", "wb"))
     print "dataset created!"
