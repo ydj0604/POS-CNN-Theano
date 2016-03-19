@@ -119,7 +119,19 @@ def clean_str_sst(string):
 if __name__ == "__main__":
     w2v_file = "data/GoogleNews-vectors-negative300.bin"
     pos_emb_file = "data/1billion-pos-24.bin"
-    data_file = "imdb/imdb.{}.txt.ss"
+    imdb_path = "docs/imdb.{}.txt.ss"
+    yelp2013_path = "docs/yelp-2013-seg-20-20.{}.ss"
+    yelp2014_path = "docs/yelp-2014-seg-20-20.{}.ss"
+
+    if len(sys.argv) < 2 or sys.argv[1] == 'imdb':
+        data_file = imdb_path
+    elif sys.argv[1] == 'yelp2013':
+        data_file = yelp2013_path
+    elif sys.argv[1] == 'yelp2014':
+        data_file = yelp2014_path
+    else:
+        print 'invalid dataset'
+        sys.exit()
 
     print "loading imdb data...",
     revs, vocab, pos_vocab = build_data_cv(data_file)
