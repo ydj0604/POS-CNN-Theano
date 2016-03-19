@@ -133,7 +133,7 @@ if __name__ == "__main__":
         print 'invalid dataset'
         sys.exit()
 
-    print "loading imdb data...",
+    print "loading {} data...".format(sys.argv[1]),
     revs, vocab, pos_vocab = build_data_cv(data_file)
     max_l = np.max(pd.DataFrame(revs)["num_words"])
     print "data loaded!"
@@ -166,5 +166,6 @@ if __name__ == "__main__":
 
     num_classes = 10 if sys.argv[1] == 'imdb' else 5
 
-    cPickle.dump([revs, W, W_rand, word_idx_map, vocab, P, P_rand, pos_idx_map, 1, num_classes], open("imdb.p", "wb"))
+    cPickle.dump([revs, W, W_rand, word_idx_map, vocab, P, P_rand, pos_idx_map, 1, num_classes],
+                 open("{}.p".format(sys.argv[1]), "wb"))
     print "dataset created!"
