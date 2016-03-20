@@ -222,7 +222,8 @@ def train_pos_cnn(datasets,
         for minibatch_index in np.random.permutation(range(n_train_batches)):
             cost = train_model(minibatch_index, min(batch_size, len(datasets[0])-minibatch_index*batch_size))
             set_zero_word(np.zeros(W.shape[1]))
-            set_zero_pos(np.zeros(P.shape[1]))
+            if model != 'notag':
+                set_zero_pos(np.zeros(P.shape[1]))
             step += 1
         train_losses = [train_eval_model(i, min(batch_size, len(datasets[0])-i*batch_size)) for i in xrange(n_train_batches)]
         train_perf = 1 - np.mean(train_losses)
