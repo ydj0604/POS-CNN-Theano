@@ -44,7 +44,7 @@ def build_data_cv(data_file):
             ratings = []
             for line in lines:
                 line_split = line.split('\t\t')
-                rating = int(line_split[2])
+                rating = int(line_split[2]) - 1
                 rev = line_split[3]
                 rev_tokens = rev.split()
                 revs_text.append(rev_tokens)
