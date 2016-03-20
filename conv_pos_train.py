@@ -180,28 +180,28 @@ def train_pos_cnn(datasets,
                                     y: val_set_y[index * batch_size: (index + 1) * batch_size],
                                     z: val_set_z[index * batch_size: (index + 1) * batch_size],
                                     is_train: np.cast['int32'](0)},
-                                allow_input_downcast=True)
+                                allow_input_downcast=True, on_unused_input='ignore')
     train_eval_model = theano.function([index, curr_batch_size], classifier.errors(y),
-                                 givens={
-                                     x: train_set_x[index * batch_size: (index + 1) * batch_size],
-                                     y: train_set_y[index * batch_size: (index + 1) * batch_size],
-                                     z: train_set_z[index * batch_size: (index + 1) * batch_size],
-                                     is_train: np.cast['int32'](0)},
-                                 allow_input_downcast=True)
+                                       givens={
+                                           x: train_set_x[index * batch_size: (index + 1) * batch_size],
+                                           y: train_set_y[index * batch_size: (index + 1) * batch_size],
+                                           z: train_set_z[index * batch_size: (index + 1) * batch_size],
+                                           is_train: np.cast['int32'](0)},
+                                       allow_input_downcast=True, on_unused_input='ignore')
     train_model = theano.function([index, curr_batch_size], cost, updates=grad_updates,
                                   givens={
                                       x: train_set_x[index*batch_size:(index+1)*batch_size],
                                       y: train_set_y[index*batch_size:(index+1)*batch_size],
                                       z: train_set_z[index*batch_size:(index+1)*batch_size],
                                       is_train: np.cast['int32'](1)},
-                                  allow_input_downcast=True)
+                                  allow_input_downcast=True, on_unused_input='ignore')
     test_model = theano.function([index, curr_batch_size], classifier.errors(y),
                                  givens={
                                      x: test_set_x[index * batch_size: (index + 1) * batch_size],
                                      y: test_set_y[index * batch_size: (index + 1) * batch_size],
                                      z: test_set_z[index * batch_size: (index + 1) * batch_size],
                                      is_train: np.cast['int32'](0)},
-                                 allow_input_downcast=True)
+                                 allow_input_downcast=True, on_unused_input='ignore')
 
     ##########################
     #        training        #
