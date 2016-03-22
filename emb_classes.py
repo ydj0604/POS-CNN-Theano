@@ -27,7 +27,6 @@ def dropout(rng, x, p, is_train):
             p=1.0-p,
             size=x.shape
         )
-        mask *= 1.0 / (1.0 - p)
         masked_x = T.switch(mask, x, 0)
     else:
         masked_x = x

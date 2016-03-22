@@ -43,7 +43,7 @@ def train_pos_cnn(datasets,
                   P,
                   filter_hs,
                   hidden_units,
-                  dropout_rate,
+                  dropout_rates,
                   n_epochs,
                   batch_size,
                   lr_decay,
@@ -56,7 +56,7 @@ def train_pos_cnn(datasets,
     parameters = [("num_filters", hidden_units[0]),
                   ("num_classes", hidden_units[1]),
                   ("filter_types", filter_hs),
-                  ("dropout", dropout_rate),
+                  ("dropout", dropout_rates),
                   ("num_epochs", n_epochs),
                   ("batch_size", batch_size),
                   ("learn_decay", lr_decay),
@@ -83,7 +83,7 @@ def train_pos_cnn(datasets,
     feature_maps = hidden_units[0]  # num filters
 
     # EMBEDDING LAYER
-    embedding_layer = EmbeddingLayer(rng, is_train, x, z, curr_batch_size, img_h, W, P, model, 0.0)
+    embedding_layer = EmbeddingLayer(rng, is_train, x, z, curr_batch_size, img_h, W, P, model, dropout_rates[0])
     layer0_input = embedding_layer.output
     img_w = embedding_layer.final_token_dim  # img w = filter width = input matrix width
 
@@ -117,7 +117,7 @@ def train_pos_cnn(datasets,
                             input=layer1_input,
                             layer_sizes=hidden_units,
                             activations=activations,
-                            dropout_rates=dropout_rate)
+                            dropout_rate=dropout_rates[1])
 
     # UPDATE
     params = classifier.params + embedding_layer.params
@@ -445,7 +445,7 @@ if __name__=="__main__":
                                                         P,  # use pre-trained pos embeddings
                                                         filter_hs=[3, 4, 5],
                                                         hidden_units=[100, num_classes],
-                                                        dropout_rate=[0.5],
+                                                        dropout_rates=[0.3, 0.5],
                                                         n_epochs=args.num_epochs,
                                                         batch_size=50,
                                                         lr_decay=0.95,

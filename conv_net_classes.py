@@ -79,7 +79,7 @@ def _dropout_from_layer(rng, layer, p):
 
 class MLPDropout(object):
     """A multilayer perceptron with dropout"""
-    def __init__(self, rng, input, layer_sizes, dropout_rates, activations, use_bias=True):
+    def __init__(self, rng, input, layer_sizes, dropout_rate, activations, use_bias=True):
 
         #rectified_linear_activation = lambda x: T.maximum(0.0, x)
 
@@ -91,7 +91,7 @@ class MLPDropout(object):
         next_layer_input = input
 
         # dropout the input
-        next_dropout_layer_input = _dropout_from_layer(rng, input, p=dropout_rates[0])
+        next_dropout_layer_input = _dropout_from_layer(rng, input, p=dropout_rate)
         
         # Set up the output layer
         n_in, n_out = self.weight_matrix_sizes[-1]
@@ -104,7 +104,7 @@ class MLPDropout(object):
         output_layer = LogisticRegression(
             input=next_layer_input,
             # scale the weight matrix W with (1-p)
-            W=dropout_output_layer.W * (1 - dropout_rates[-1]),
+            W=dropout_output_layer.W * (1 - dropout_rate),
             b=dropout_output_layer.b,
             n_in=n_in, n_out=n_out)
         self.layers.append(output_layer)
